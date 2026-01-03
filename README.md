@@ -28,7 +28,7 @@ The compression algorithm:
 docker-compose up -d
 
 # Access the web interface
-open http://localhost:5000
+open http://localhost:5050
 ```
 
 ### Using Docker directly
@@ -38,7 +38,7 @@ open http://localhost:5000
 docker build -t pycompressweb .
 
 # Run the container
-docker run -p 5000:5000 pycompressweb
+docker run -p 5050:5050 pycompressweb
 ```
 
 ### Local Development
@@ -57,7 +57,7 @@ python app.py
 
 ## Usage
 
-1. Open http://localhost:5000 in your browser
+1. Open http://localhost:5050 in your browser
 2. Drag & drop your JPG images onto the upload zone (or click to select)
 3. Set your target file size in KB (default: 200 KB)
 4. Click "Compress Images"
@@ -68,7 +68,7 @@ python app.py
 
 | Setting | Default | Description |
 |---------|---------|-------------|
-| Port | 5000 | Web server port |
+| Port | 5050 | Web server port |
 | Max Upload | 100 MB | Maximum total upload size |
 | Session Cleanup | 1 hour | Automatic deletion of temporary files |
 

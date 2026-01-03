@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the application on a custom port."""
+"""Run the application."""
 from app import app
 
 if __name__ == '__main__':
