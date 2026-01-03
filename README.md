@@ -26,7 +26,7 @@ Keep it behind your firewall, choom. Netrunners are everywhere.
 - 🎯 **Target Size**: Specify your desired output file size in KB
 - 🔄 **Format Conversion**: Keep original format, or convert to JPG/PNG
 - ⚡ **Smart Compression**: Automatically balances quality and resolution to achieve target size
-- 🔒 **Quality Floor**: Never drops below 25% quality to maintain image integrity
+- 🔒 **Quality Floor**: Never drops below 25% quality for both JPG and PNG to maintain image integrity
 - 📊 **Detailed Results**: See compression stats for each image (size, resolution, quality used)
 - 📦 **ZIP Download**: Download all compressed images in a single ZIP file
 - 🗑️ **Clear & Reset**: Clear selected files or start a new session with cache cleanup
@@ -38,11 +38,11 @@ Keep it behind your firewall, choom. Netrunners are everywhere.
 The compression algorithm prioritizes quality over resolution reduction:
 
 1. **Quality Adjustment**: Binary search for optimal quality (25-95%) at current resolution
-   - JPEG: Uses quality parameter (0-100)
-   - PNG: Uses compression level (0-9, mapped from quality)
+   - JPEG: Uses quality parameter (25-95)
+   - PNG: Uses compression level (0-9, mapped from quality 25-95)
 2. **Resolution Scaling**: If target can't be met, progressively reduces resolution (90%, 80%, 70%... down to 10%)
 3. **Best Fit**: At each resolution, finds the highest quality setting that meets the size target
-4. **Quality Floor**: Quality never drops below 25% to prevent artifacts
+4. **Quality Floor**: Quality never drops below 25% for either format — your images won't look like they came from a relic terminal
 5. **Format Conversion**: Optionally convert between JPG and PNG formats
 
 **Result**: Best possible visual quality under your KB limit.
@@ -110,8 +110,8 @@ python app.py
 |---------|---------|-------------|
 | Port | 5050 | Web server port |
 | Max Upload | 100 MB | Maximum total upload size |
-| Min Quality | 25% | Quality floor (never goes below this) |
-| Max Quality | 95% | Maximum JPEG quality |
+| Min Quality | 25% | Quality floor for both JPG and PNG (never goes below this) |
+| Max Quality | 95% | Maximum quality for both formats |
 | Request Timeout | 600s | Gunicorn timeout for large batches |
 | Session Cleanup | 1 hour | Automatic deletion of temporary files |
 
