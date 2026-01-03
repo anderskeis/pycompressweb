@@ -1,8 +1,24 @@
 # Keis ImageCompress
 
-A modern web application for batch compressing JPG and PNG images to a target file size while maintaining optimal quality. Features a sleek dark-themed interface and smart compression algorithms. Available as a Docker image for easy deployment on any platform.
+> *"In 2077, what makes someone a criminal? Getting caught with uncompressed images."*
+
+A cyberpunk-themed web application for batch compressing JPG and PNG images to a target file size while maintaining optimal quality. Features a **Cyberpunk 2077-inspired** neon UI with glowing cyan accents, yellow highlights, and enough visual glitch effects to make your images feel like they're being processed in Night City. Available as a Docker image for easy deployment.
 
 [![Docker Hub](https://img.shields.io/docker/pulls/anderskeis/pycompressweb?style=flat-square)](https://hub.docker.com/r/anderskeis/pycompressweb)
+
+## ⚠️ Security Warning
+
+**This application is designed for LOCAL USE ONLY.**
+
+> 🚨 **Do NOT expose this application to the public internet.** 🚨
+
+- No authentication or authorization
+- No rate limiting
+- No input sanitization beyond basic file type checks
+- Temporary files stored on disk
+- Session IDs are predictable UUIDs
+
+Keep it behind your firewall, choom. Netrunners are everywhere.
 
 ## Features
 
@@ -14,7 +30,7 @@ A modern web application for batch compressing JPG and PNG images to a target fi
 - 📊 **Detailed Results**: See compression stats for each image (size, resolution, quality used)
 - 📦 **ZIP Download**: Download all compressed images in a single ZIP file
 - 🗑️ **Clear & Reset**: Clear selected files or start a new session with cache cleanup
-- 🎨 **Modern UI**: Sleek dark theme with Inter font and smooth animations
+- 🎨 **Cyberpunk UI**: Night City-inspired interface with neon glows, glitch effects, and Orbitron typography
 - 🐳 **Docker Ready**: Multi-platform Docker image (amd64 & arm64)
 
 ## How It Works
@@ -174,3 +190,7 @@ docker buildx build --platform linux/amd64,linux/arm64 -t anderskeis/pycompressw
 ## License
 
 MIT
+
+---
+
+*"The compression is temporary, but the savings are eternal."* — Johnny Silverhand, probably
