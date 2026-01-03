@@ -1,37 +1,53 @@
 # PyCompressWeb
 
-A local web application for batch compressing JPG images to a target file size while maintaining optimal quality.
+A web application for batch compressing JPG images to a target file size while maintaining optimal quality. Available as a Docker image for easy deployment on any platform.
+
+[![Docker Hub](https://img.shields.io/docker/pulls/anderskeis/pycompressweb?style=flat-square)](https://hub.docker.com/r/anderskeis/pycompressweb)
 
 ## Features
 
 - 🖼️ **Batch Upload**: Drag & drop or select multiple JPG images at once
 - 🎯 **Target Size**: Specify your desired output file size in KB
 - ⚡ **Smart Compression**: Automatically balances quality and resolution to achieve target size
-- 📊 **Detailed Results**: See compression stats for each image
+- 🔒 **Quality Floor**: Never drops below 25% quality to maintain image integrity
+- 📊 **Detailed Results**: See compression stats for each image (size, resolution, quality used)
 - 📦 **ZIP Download**: Download all compressed images in a single ZIP file
-- 🐳 **Docker Ready**: Easy deployment with Docker Compose
+- 🐳 **Docker Ready**: Multi-platform Docker image (amd64 & arm64)
 
 ## How It Works
 
-The compression algorithm:
-1. First tries to achieve target size by adjusting JPEG quality (binary search from 10-95)
-2. If quality adjustment alone isn't enough, progressively reduces resolution (90%, 80%, 70%... down to 10%)
-3. At each resolution, finds the highest quality setting that meets the size target
-4. Result: Best possible visual quality under your KB limit
+The compression algorithm prioritizes quality over resolution reduction:
+
+1. **Quality Adjustment**: Binary search for optimal JPEG quality (25-95%) at current resolution
+2. **Resolution Scaling**: If target can't be met, progressively reduces resolution (90%, 80%, 70%... down to 10%)
+3. **Best Fit**: At each resolution, finds the highest quality setting that meets the size target
+4. **Quality Floor**: Quality never drops below 25% to prevent artifacts
+
+**Result**: Best possible visual quality under your KB limit.
 
 ## Quick Start
 
-### Using Docker Compose (Recommended)
+### Using Docker Hub Image (Recommended)
 
 ```bash
-# Build and start the container
-docker-compose up -d
+# Pull and run the pre-built image
+docker run -d -p 5050:5050 anderskeis/pycompressweb:latest
 
 # Access the web interface
 open http://localhost:5050
 ```
 
-### Using Docker directly
+### Using Docker Compose
+
+```bash
+# Clone the repo and start
+docker compose up -d
+
+# Access the web interface
+open http://localhost:5050
+```
+
+### Build Locally
 
 ```bash
 # Build the image
@@ -41,7 +57,7 @@ docker build -t pycompressweb .
 docker run -p 5050:5050 pycompressweb
 ```
 
-### Local Development
+### Local Development (without Docker)
 
 ```bash
 # Create virtual environment
@@ -70,6 +86,9 @@ python app.py
 |---------|---------|-------------|
 | Port | 5050 | Web server port |
 | Max Upload | 100 MB | Maximum total upload size |
+| Min Quality | 25% | Quality floor (never goes below this) |
+| Max Quality | 95% | Maximum JPEG quality |
+| Request Timeout | 600s | Gunicorn timeout for large batches |
 | Session Cleanup | 1 hour | Automatic deletion of temporary files |
 
 ## API Endpoints
@@ -81,12 +100,66 @@ python app.py
 | `/download/<session_id>` | GET | Download compressed images as ZIP |
 | `/cleanup/<session_id>` | POST | Manually cleanup session files |
 
+### Upload Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `files[]` | File[] | Array of JPG/JPEG files |
+| `target_kb` | Number | Target file size in KB |
+
+### Response Format
+
+```json
+{
+  "session_id": "uuid",
+  "processed_count": 5,
+  "target_kb": 200,
+  "results": [
+    {
+      "filename": "image.jpg",
+      "success": true,
+      "original_size_kb": 1500.5,
+      "original_resolution": "4000x3000",
+      "final_size_kb": 198.2,
+      "final_resolution": "2400x1800",
+      "quality_used": 85,
+      "scale_factor": 0.6
+    }
+  ]
+}
+```
+
+## Deployment Notes
+
+### Reverse Proxy (Nginx)
+
+If running behind Nginx, add these settings for large batch uploads:
+
+```nginx
+location / {
+    proxy_pass http://localhost:5050;
+    proxy_read_timeout 600s;
+    proxy_connect_timeout 600s;
+    proxy_send_timeout 600s;
+    client_max_body_size 100M;
+}
+```
+
+### Building Multi-Platform Image
+
+To build for both amd64 and arm64:
+
+```bash
+docker buildx create --name multiplatform --use
+docker buildx build --platform linux/amd64,linux/arm64 -t anderskeis/pycompressweb:latest --push .
+```
+
 ## Tech Stack
 
-- **Backend**: Python, Flask, Pillow
-- **Frontend**: Vanilla HTML/CSS/JavaScript
+- **Backend**: Python 3.11, Flask 3.0, Pillow 10.2
+- **Frontend**: Vanilla HTML/CSS/JavaScript (no build step)
 - **Production Server**: Gunicorn
-- **Container**: Docker
+- **Container**: Docker (multi-platform: amd64/arm64)
 
 ## License
 

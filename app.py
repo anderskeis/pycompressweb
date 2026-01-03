@@ -86,7 +86,7 @@ def compress_to_target_size(image_path, target_kb, output_path):
             current_image = original_image.resize((new_width, new_height), Image.LANCZOS)
         
         # Binary search for optimal quality at this resolution
-        min_quality = 10
+        min_quality = 25
         max_quality = 95
         best_quality = min_quality
         best_size = float('inf')
@@ -121,13 +121,13 @@ def compress_to_target_size(image_path, target_kb, output_path):
         (int(width * 0.1), int(height * 0.1)), 
         Image.LANCZOS
     )
-    min_scale_image.save(output_path, 'JPEG', quality=10, optimize=True)
+    min_scale_image.save(output_path, 'JPEG', quality=25, optimize=True)
     final_size = os.path.getsize(output_path) / 1024
     
     result['final_size_kb'] = round(final_size, 2)
     new_w, new_h = min_scale_image.size
-    result['final_resolution'] = f'{new_w}x{new_h}'
-    result['quality_used'] = 10
+    result['final_resolution'] = f'{new_w}x{new_h}')
+    result['quality_used'] = 25
     result['scale_factor'] = 0.1
     
     return result
