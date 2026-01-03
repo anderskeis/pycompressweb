@@ -25,4 +25,5 @@ RUN mkdir -p /tmp/pycompressweb/uploads /tmp/pycompressweb/output
 EXPOSE 5050
 
 # Run with gunicorn for production
-CMD ["gunicorn", "--bind", "0.0.0.0:5050", "--workers", "2", "--timeout", "120", "app:app"]
+# Increased timeout to 600s for large batch processing
+CMD ["gunicorn", "--bind", "0.0.0.0:5050", "--workers", "2", "--timeout", "600", "--graceful-timeout", "600", "app:app"]
