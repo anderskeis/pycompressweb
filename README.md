@@ -189,7 +189,7 @@ docker buildx build --platform linux/amd64,linux/arm64 -t anderskeis/pycompressw
 
 ## License
 
-MIT
+Do whatever you want :)
 
 ---
 
