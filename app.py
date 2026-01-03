@@ -1,6 +1,6 @@
 """
-PyCompressWeb - Batch Image Compression Web Application
-Compresses JPG images to a target KB size with optimal quality/resolution balance.
+Keis ImageCompress - Batch Image Compression Web Application
+Compresses JPG and PNG images to a target KB size with optimal quality/resolution balance.
 """
 
 import os
@@ -18,7 +18,7 @@ app = Flask(__name__)
 # Configuration
 UPLOAD_FOLDER = '/tmp/pycompressweb/uploads'
 OUTPUT_FOLDER = '/tmp/pycompressweb/output'
-ALLOWED_EXTENSIONS = {'jpg', 'jpeg'}
+ALLOWED_EXTENSIONS = {'jpg', 'jpeg', 'png'}
 MAX_CONTENT_LENGTH = 100 * 1024 * 1024  # 100MB max total upload
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
@@ -37,22 +37,55 @@ def allowed_file(filename):
 def get_file_size_kb(image, quality, format='JPEG'):
     """Get the file size in KB for an image at given quality."""
     buffer = io.BytesIO()
-    image.save(buffer, format=format, quality=quality, optimize=True)
+    if format == 'PNG':
+        # PNG uses compress_level (0-9) instead of quality
+        compress_level = max(1, min(9, 9 - (quality // 11)))
+        image.save(buffer, format=format, optimize=True, compress_level=compress_level)
+    else:
+        image.save(buffer, format=format, quality=quality, optimize=True)
     return buffer.tell() / 1024
 
 
-def compress_to_target_size(image_path, target_kb, output_path):
+def compress_to_target_size(image_path, target_kb, output_path, output_format='original'):
     """
     Compress image to target KB size with best possible quality.
     Uses binary search to find optimal quality, then reduces resolution if needed.
     
+    Args:
+        image_path: Path to source image
+        target_kb: Target file size in KB
+        output_path: Path for compressed output
+        output_format: 'original', 'jpg', or 'png'
+    
     Returns dict with compression results.
     """
     original_image = Image.open(image_path)
+    original_ext = os.path.splitext(image_path)[1].lower()
     
-    # Convert to RGB if necessary (handles RGBA, P mode, etc.)
-    if original_image.mode in ('RGBA', 'P', 'LA'):
+    # Determine output format
+    if output_format == 'jpg':
+        save_format = 'JPEG'
+        out_ext = '.jpg'
+    elif output_format == 'png':
+        save_format = 'PNG'
+        out_ext = '.png'
+    else:  # original
+        if original_ext in ['.png']:
+            save_format = 'PNG'
+            out_ext = '.png'
+        else:
+            save_format = 'JPEG'
+            out_ext = '.jpg'
+    
+    # Update output path with correct extension
+    output_base = os.path.splitext(output_path)[0]
+    output_path = output_base + out_ext
+    
+    # Convert to appropriate mode
+    if save_format == 'JPEG' and original_image.mode in ('RGBA', 'P', 'LA'):
         original_image = original_image.convert('RGB')
+    elif save_format == 'PNG' and original_image.mode == 'P':
+        original_image = original_image.convert('RGBA')
     
     original_size_kb = os.path.getsize(image_path) / 1024
     width, height = original_image.size
@@ -63,16 +96,21 @@ def compress_to_target_size(image_path, target_kb, output_path):
         'final_size_kb': 0,
         'final_resolution': '',
         'quality_used': 0,
-        'scale_factor': 1.0
+        'scale_factor': 1.0,
+        'output_format': save_format
     }
     
     # If already under target, just optimize
     if original_size_kb <= target_kb:
-        original_image.save(output_path, 'JPEG', quality=95, optimize=True)
+        if save_format == 'PNG':
+            original_image.save(output_path, 'PNG', optimize=True)
+        else:
+            original_image.save(output_path, 'JPEG', quality=95, optimize=True)
         final_size = os.path.getsize(output_path) / 1024
         result['final_size_kb'] = round(final_size, 2)
         result['final_resolution'] = f'{width}x{height}'
         result['quality_used'] = 95
+        result['output_filename'] = os.path.basename(output_path)
         return result
     
     current_image = original_image.copy()
@@ -93,7 +131,7 @@ def compress_to_target_size(image_path, target_kb, output_path):
         
         while min_quality <= max_quality:
             mid_quality = (min_quality + max_quality) // 2
-            size_kb = get_file_size_kb(current_image, mid_quality)
+            size_kb = get_file_size_kb(current_image, mid_quality, save_format)
             
             if size_kb <= target_kb:
                 best_quality = mid_quality
@@ -106,7 +144,11 @@ def compress_to_target_size(image_path, target_kb, output_path):
         if best_size <= target_kb:
             scale_factor = scale
             # Save the result
-            current_image.save(output_path, 'JPEG', quality=best_quality, optimize=True)
+            if save_format == 'PNG':
+                compress_level = max(1, min(9, 9 - (best_quality // 11)))
+                current_image.save(output_path, 'PNG', optimize=True, compress_level=compress_level)
+            else:
+                current_image.save(output_path, 'JPEG', quality=best_quality, optimize=True)
             final_size = os.path.getsize(output_path) / 1024
             
             result['final_size_kb'] = round(final_size, 2)
@@ -114,6 +156,7 @@ def compress_to_target_size(image_path, target_kb, output_path):
             result['final_resolution'] = f'{new_w}x{new_h}'
             result['quality_used'] = best_quality
             result['scale_factor'] = scale_factor
+            result['output_filename'] = os.path.basename(output_path)
             return result
     
     # Fallback: use minimum quality at minimum scale
@@ -121,7 +164,10 @@ def compress_to_target_size(image_path, target_kb, output_path):
         (int(width * 0.1), int(height * 0.1)), 
         Image.LANCZOS
     )
-    min_scale_image.save(output_path, 'JPEG', quality=25, optimize=True)
+    if save_format == 'PNG':
+        min_scale_image.save(output_path, 'PNG', optimize=True, compress_level=9)
+    else:
+        min_scale_image.save(output_path, 'JPEG', quality=25, optimize=True)
     final_size = os.path.getsize(output_path) / 1024
     
     result['final_size_kb'] = round(final_size, 2)
@@ -129,6 +175,7 @@ def compress_to_target_size(image_path, target_kb, output_path):
     result['final_resolution'] = f'{new_w}x{new_h}'
     result['quality_used'] = 25
     result['scale_factor'] = 0.1
+    result['output_filename'] = os.path.basename(output_path)
     
     return result
 
@@ -164,6 +211,7 @@ def upload_files():
     
     files = request.files.getlist('files[]')
     target_kb = request.form.get('target_kb', type=float)
+    output_format = request.form.get('output_format', 'original')
     
     if not target_kb or target_kb <= 0:
         return jsonify({'error': 'Invalid target size'}), 400
@@ -201,8 +249,8 @@ def upload_files():
             
             try:
                 # Compress the image
-                compression_result = compress_to_target_size(input_file, target_kb, output_file)
-                compression_result['filename'] = filename
+                compression_result = compress_to_target_size(input_file, target_kb, output_file, output_format)
+                compression_result['filename'] = compression_result.get('output_filename', filename)
                 compression_result['original_filename'] = original_filename
                 compression_result['success'] = True
                 results.append(compression_result)
@@ -219,7 +267,7 @@ def upload_files():
         # Cleanup empty session folders
         shutil.rmtree(upload_path, ignore_errors=True)
         shutil.rmtree(output_path, ignore_errors=True)
-        return jsonify({'error': 'No valid JPG files were processed'}), 400
+        return jsonify({'error': 'No valid image files were processed'}), 400
     
     # Store session info
     sessions[session_id] = {
