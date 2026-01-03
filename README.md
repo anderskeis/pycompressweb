@@ -1,27 +1,33 @@
-# PyCompressWeb
+# Keis ImageCompress
 
-A web application for batch compressing JPG images to a target file size while maintaining optimal quality. Available as a Docker image for easy deployment on any platform.
+A modern web application for batch compressing JPG and PNG images to a target file size while maintaining optimal quality. Features a sleek dark-themed interface and smart compression algorithms. Available as a Docker image for easy deployment on any platform.
 
 [![Docker Hub](https://img.shields.io/docker/pulls/anderskeis/pycompressweb?style=flat-square)](https://hub.docker.com/r/anderskeis/pycompressweb)
 
 ## Features
 
-- 🖼️ **Batch Upload**: Drag & drop or select multiple JPG images at once
+- 🖼️ **Batch Upload**: Drag & drop or select multiple JPG and PNG images at once
 - 🎯 **Target Size**: Specify your desired output file size in KB
+- 🔄 **Format Conversion**: Keep original format, or convert to JPG/PNG
 - ⚡ **Smart Compression**: Automatically balances quality and resolution to achieve target size
 - 🔒 **Quality Floor**: Never drops below 25% quality to maintain image integrity
 - 📊 **Detailed Results**: See compression stats for each image (size, resolution, quality used)
 - 📦 **ZIP Download**: Download all compressed images in a single ZIP file
+- 🗑️ **Clear & Reset**: Clear selected files or start a new session with cache cleanup
+- 🎨 **Modern UI**: Sleek dark theme with Inter font and smooth animations
 - 🐳 **Docker Ready**: Multi-platform Docker image (amd64 & arm64)
 
 ## How It Works
 
 The compression algorithm prioritizes quality over resolution reduction:
 
-1. **Quality Adjustment**: Binary search for optimal JPEG quality (25-95%) at current resolution
+1. **Quality Adjustment**: Binary search for optimal quality (25-95%) at current resolution
+   - JPEG: Uses quality parameter (0-100)
+   - PNG: Uses compression level (0-9, mapped from quality)
 2. **Resolution Scaling**: If target can't be met, progressively reduces resolution (90%, 80%, 70%... down to 10%)
 3. **Best Fit**: At each resolution, finds the highest quality setting that meets the size target
 4. **Quality Floor**: Quality never drops below 25% to prevent artifacts
+5. **Format Conversion**: Optionally convert between JPG and PNG formats
 
 **Result**: Best possible visual quality under your KB limit.
 
@@ -74,11 +80,13 @@ python app.py
 ## Usage
 
 1. Open http://localhost:5050 in your browser
-2. Drag & drop your JPG images onto the upload zone (or click to select)
+2. Drag & drop your JPG or PNG images onto the upload zone (or click to select)
 3. Set your target file size in KB (default: 200 KB)
-4. Click "Compress Images"
-5. Review the results showing original vs compressed sizes
-6. Click "Download ZIP" to get all optimized images
+4. Choose output format: Keep Original, Convert to JPG, or Convert to PNG
+5. Click "Compress Images"
+6. Review the results showing original vs compressed sizes
+7. Click "Download ZIP" to get all optimized images
+8. Use "New Session" to clear cache and start fresh
 
 ## Configuration
 
@@ -104,8 +112,9 @@ python app.py
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `files[]` | File[] | Array of JPG/JPEG files |
+| `files[]` | File[] | Array of JPG/JPEG/PNG files |
 | `target_kb` | Number | Target file size in KB |
+| `output_format` | String | Output format: `original`, `jpg`, or `png` |
 
 ### Response Format
 
@@ -123,7 +132,8 @@ python app.py
       "final_size_kb": 198.2,
       "final_resolution": "2400x1800",
       "quality_used": 85,
-      "scale_factor": 0.6
+      "scale_factor": 0.6,
+      "output_format": "JPEG"
     }
   ]
 }
