@@ -126,7 +126,7 @@ def compress_to_target_size(image_path, target_kb, output_path):
     
     result['final_size_kb'] = round(final_size, 2)
     new_w, new_h = min_scale_image.size
-    result['final_resolution'] = f'{new_w}x{new_h}')
+    result['final_resolution'] = f'{new_w}x{new_h}'
     result['quality_used'] = 25
     result['scale_factor'] = 0.1
     

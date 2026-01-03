@@ -1,7 +1,7 @@
 services:
   pycompressweb:
-    image: anderskeis/pycompressweb:latest
-    # build: .  # Uncomment to build locally instead of using Docker Hub image
+    # image: anderskeis/pycompressweb:latest
+    build: .  # Uncomment to build locally instead of using Docker Hub image
     ports:
       - "5050:5050"
     volumes:
