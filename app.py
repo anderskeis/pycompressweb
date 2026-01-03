@@ -5,6 +5,7 @@ Compresses JPG and PNG images to a target KB size with optimal quality/resolutio
 
 import os
 import io
+import re
 import uuid
 import zipfile
 import shutil
@@ -14,6 +15,14 @@ from werkzeug.utils import secure_filename
 from PIL import Image
 
 app = Flask(__name__)
+
+# Security: UUID validation pattern to prevent path traversal
+UUID_PATTERN = re.compile(r'^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$')
+
+
+def is_valid_session_id(session_id):
+    """Validate session_id is a proper UUID to prevent path traversal attacks."""
+    return bool(session_id and UUID_PATTERN.match(session_id))
 
 # Configuration
 UPLOAD_FOLDER = '/tmp/pycompressweb/uploads'
@@ -287,6 +296,10 @@ def upload_files():
 @app.route('/download/<session_id>')
 def download_zip(session_id):
     """Create and download ZIP file with compressed images."""
+    # Security: Validate session_id to prevent path traversal
+    if not is_valid_session_id(session_id):
+        return jsonify({'error': 'Invalid session ID'}), 400
+    
     output_path = os.path.join(OUTPUT_FOLDER, session_id)
     
     if not os.path.exists(output_path):
@@ -314,6 +327,10 @@ def download_zip(session_id):
 @app.route('/cleanup/<session_id>', methods=['POST'])
 def cleanup_session(session_id):
     """Manually cleanup a session's files."""
+    # Security: Validate session_id to prevent path traversal
+    if not is_valid_session_id(session_id):
+        return jsonify({'error': 'Invalid session ID'}), 400
+    
     upload_path = os.path.join(UPLOAD_FOLDER, session_id)
     output_path = os.path.join(OUTPUT_FOLDER, session_id)
     
@@ -331,4 +348,5 @@ if __name__ == '__main__':
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
     os.makedirs(OUTPUT_FOLDER, exist_ok=True)
     
-    app.run(host='0.0.0.0', port=5050, debug=True)
+    # Security: debug=False to prevent interactive debugger exposure
+    app.run(host='0.0.0.0', port=5050, debug=False)
