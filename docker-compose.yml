@@ -1,22 +1,14 @@
 services:
-  web:
-    build:
-      context: .
-      dockerfile: Dockerfile
+  pycompressweb:
+    image: anderskeis/pycompressweb:latest
+    # build: .  # Uncomment to build locally instead of using Docker Hub image
     ports:
       - "5000:5000"
     volumes:
-      # Mount temp directory for file persistence across restarts (optional)
       - pycompressweb-data:/tmp/pycompressweb
     environment:
       - FLASK_ENV=production
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
 
 volumes:
   pycompressweb-data:
