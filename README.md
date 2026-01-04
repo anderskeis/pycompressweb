@@ -114,45 +114,71 @@ python app.py
 | Max Quality | 95% | Maximum quality for both formats |
 | Request Timeout | 600s | Gunicorn timeout for large batches |
 | Session Cleanup | 1 hour | Automatic deletion of temporary files |
+| LOG_LEVEL | INFO | Logging verbosity (DEBUG, INFO, WARNING, ERROR) |
 
-## API Endpoints
+## Viewing Logs
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/` | GET | Main web interface |
-| `/upload` | POST | Upload and compress images |
-| `/download/<session_id>` | GET | Download compressed images as ZIP |
-| `/cleanup/<session_id>` | POST | Manually cleanup session files |
+The application logs all key operations: uploads, compression results, downloads, and security events.
 
-### Upload Parameters
+### Log Levels
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `files[]` | File[] | Array of JPG/JPEG/PNG files |
-| `target_kb` | Number | Target file size in KB |
-| `output_format` | String | Output format: `original`, `jpg`, or `png` |
+| Level | What's Logged |
+|-------|---------------|
+| `DEBUG` | Session creation, cleanup details, algorithm steps |
+| `INFO` | Uploads, compression results, downloads, startup |
+| `WARNING` | Invalid requests, expired sessions, security rejections |
+| `ERROR` | Compression failures, file I/O errors |
 
-### Response Format
+### Docker Container Logs
 
-```json
-{
-  "session_id": "uuid",
-  "processed_count": 5,
-  "target_kb": 200,
-  "results": [
-    {
-      "filename": "image.jpg",
-      "success": true,
-      "original_size_kb": 1500.5,
-      "original_resolution": "4000x3000",
-      "final_size_kb": 198.2,
-      "final_resolution": "2400x1800",
-      "quality_used": 85,
-      "scale_factor": 0.6,
-      "output_format": "JPEG"
-    }
-  ]
-}
+```bash
+# Follow logs in real-time
+docker logs -f pycompressweb-pycompressweb-1
+
+# View last 100 lines
+docker logs --tail 100 pycompressweb-pycompressweb-1
+
+# View logs with timestamps
+docker logs -t pycompressweb-pycompressweb-1
+```
+
+### Docker Compose Logs
+
+```bash
+# Follow logs
+docker compose logs -f
+
+# View logs since last hour
+docker compose logs --since 1h
+```
+
+### Setting Log Level
+
+Set the `LOG_LEVEL` environment variable to control verbosity:
+
+```bash
+# In docker-compose.yml
+environment:
+  - LOG_LEVEL=DEBUG
+
+# Or when running directly
+LOG_LEVEL=DEBUG python app.py
+
+# Or with docker run
+docker run -e LOG_LEVEL=DEBUG -p 5050:5050 anderskeis/pycompressweb:latest
+```
+
+### Example Log Output
+
+```
+2026-01-04 14:32:15 - INFO - Keis ImageCompress starting on http://0.0.0.0:5050
+2026-01-04 14:32:15 - INFO - Log level: INFO
+2026-01-04 14:33:01 - INFO - Upload received: 5 files, target=200KB, format=original
+2026-01-04 14:33:02 - INFO - Compressed photo1.jpg: 1500KB → 198KB (quality=85, scale=0.6)
+2026-01-04 14:33:03 - INFO - Compressed photo2.png: 2400KB → 195KB (quality=70, scale=0.5)
+2026-01-04 14:33:04 - INFO - Session abc12345: Processed 5 images successfully
+2026-01-04 14:33:10 - INFO - ZIP download started for session abc12345
+2026-01-04 14:35:00 - WARNING - Invalid session ID attempted: ../../../etc/passwd
 ```
 
 ## Deployment Notes

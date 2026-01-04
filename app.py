@@ -7,12 +7,22 @@ import os
 import io
 import re
 import uuid
+import logging
 import zipfile
 import shutil
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, jsonify, send_file
 from werkzeug.utils import secure_filename
 from PIL import Image
+
+# Configure logging
+LOG_LEVEL = os.environ.get('LOG_LEVEL', 'INFO').upper()
+logging.basicConfig(
+    level=getattr(logging, LOG_LEVEL, logging.INFO),
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
@@ -193,6 +203,7 @@ def cleanup_old_sessions(max_age_hours=1):
     """Remove session folders older than max_age_hours."""
     cutoff = datetime.now() - timedelta(hours=max_age_hours)
     
+    cleaned_count = 0
     for folder in [UPLOAD_FOLDER, OUTPUT_FOLDER]:
         if os.path.exists(folder):
             for session_id in os.listdir(folder):
@@ -201,6 +212,9 @@ def cleanup_old_sessions(max_age_hours=1):
                     mtime = datetime.fromtimestamp(os.path.getmtime(session_path))
                     if mtime < cutoff:
                         shutil.rmtree(session_path, ignore_errors=True)
+                        cleaned_count += 1
+    if cleaned_count > 0:
+        logger.debug(f'Cleaned up {cleaned_count} expired session folders')
 
 
 @app.route('/')
@@ -216,6 +230,7 @@ def upload_files():
     cleanup_old_sessions()
     
     if 'files[]' not in request.files:
+        logger.warning('Upload request received with no files')
         return jsonify({'error': 'No files provided'}), 400
     
     files = request.files.getlist('files[]')
@@ -223,10 +238,14 @@ def upload_files():
     output_format = request.form.get('output_format', 'original')
     
     if not target_kb or target_kb <= 0:
+        logger.warning(f'Invalid target size requested: {target_kb}')
         return jsonify({'error': 'Invalid target size'}), 400
     
     if not files or all(f.filename == '' for f in files):
+        logger.warning('Upload request with empty file list')
         return jsonify({'error': 'No files selected'}), 400
+    
+    logger.info(f'Upload received: {len(files)} files, target={target_kb}KB, format={output_format}')
     
     # Create session folders
     session_id = str(uuid.uuid4())
@@ -234,6 +253,7 @@ def upload_files():
     output_path = os.path.join(OUTPUT_FOLDER, session_id)
     os.makedirs(upload_path, exist_ok=True)
     os.makedirs(output_path, exist_ok=True)
+    logger.debug(f'Created session {session_id[:8]}')
     
     results = []
     processed_count = 0
@@ -264,7 +284,9 @@ def upload_files():
                 compression_result['success'] = True
                 results.append(compression_result)
                 processed_count += 1
+                logger.info(f'Compressed {filename}: {compression_result["original_size_kb"]}KB → {compression_result["final_size_kb"]}KB (quality={compression_result["quality_used"]}, scale={compression_result["scale_factor"]})')
             except Exception as e:
+                logger.error(f'Failed to compress {filename}: {str(e)}')
                 results.append({
                     'filename': filename,
                     'original_filename': original_filename,
@@ -285,6 +307,7 @@ def upload_files():
         'target_kb': target_kb
     }
     
+    logger.info(f'Session {session_id[:8]}: Processed {processed_count} images successfully')
     return jsonify({
         'session_id': session_id,
         'results': results,
@@ -298,12 +321,16 @@ def download_zip(session_id):
     """Create and download ZIP file with compressed images."""
     # Security: Validate session_id to prevent path traversal
     if not is_valid_session_id(session_id):
+        logger.warning(f'Invalid session ID attempted: {session_id[:50]}')
         return jsonify({'error': 'Invalid session ID'}), 400
     
     output_path = os.path.join(OUTPUT_FOLDER, session_id)
     
     if not os.path.exists(output_path):
+        logger.warning(f'Download requested for expired/missing session: {session_id[:8]}')
         return jsonify({'error': 'Session not found or expired'}), 404
+    
+    logger.info(f'ZIP download started for session {session_id[:8]}')
     
     # Create ZIP file in memory
     zip_buffer = io.BytesIO()
@@ -329,6 +356,7 @@ def cleanup_session(session_id):
     """Manually cleanup a session's files."""
     # Security: Validate session_id to prevent path traversal
     if not is_valid_session_id(session_id):
+        logger.warning(f'Invalid session ID in cleanup: {session_id[:50]}')
         return jsonify({'error': 'Invalid session ID'}), 400
     
     upload_path = os.path.join(UPLOAD_FOLDER, session_id)
@@ -340,6 +368,7 @@ def cleanup_session(session_id):
     if session_id in sessions:
         del sessions[session_id]
     
+    logger.info(f'Session {session_id[:8]} cleaned up manually')
     return jsonify({'success': True})
 
 
@@ -347,6 +376,9 @@ if __name__ == '__main__':
     # Ensure folders exist
     os.makedirs(UPLOAD_FOLDER, exist_ok=True)
     os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+    
+    logger.info('Keis ImageCompress starting on http://0.0.0.0:5050')
+    logger.info(f'Log level: {LOG_LEVEL}')
     
     # Security: debug=False to prevent interactive debugger exposure
     app.run(host='0.0.0.0', port=5050, debug=False)
