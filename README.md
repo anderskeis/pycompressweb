@@ -47,6 +47,76 @@ The compression algorithm prioritizes quality over resolution reduction:
 
 **Result**: Best possible visual quality under your KB limit.
 
+## Architecture
+
+### System Architecture
+
+```mermaid
+graph TB
+    User["👤 User Browser"]
+    UI["🎨 Cyberpunk UI<br/>HTML/CSS/JavaScript"]
+    Flask["⚙️ Flask Backend<br/>Python 3.11"]
+    Compress["🖼️ Compression Engine<br/>Pillow Image Processing"]
+    Storage["💾 Temporary Storage<br/>/tmp/pycompressweb"]
+    Zip["📦 ZIP Creator"]
+    Download["⬇️ Download"]
+    
+    Docker["🐳 Docker Container<br/>Gunicorn Server"]
+    
+    User -->|HTTP| UI
+    UI -->|POST /upload| Flask
+    Flask -->|Process Images| Compress
+    Compress -->|Save Results| Storage
+    Flask -->|GET /download| Zip
+    Zip -->|Create Archive| Storage
+    Zip -->|Return ZIP| Download
+    Download -->|HTTP Response| User
+    
+    Flask -.->|Runs In| Docker
+    Compress -.->|Runs In| Docker
+    Storage -.->|Volume| Docker
+```
+
+### Compression Algorithm Flow
+
+```mermaid
+graph TD
+    Start["📥 Image Uploaded"]
+    Input["Input Image<br/>Original Quality & Resolution"]
+    
+    Phase1["⚡ Phase 1: Quality Optimization<br/>Binary Search 25-95%"]
+    Quality_Search["At Current Resolution:<br/>Find max quality ≤ target size"]
+    
+    Decision1{{"Meets Target<br/>Size?"}}
+    
+    Phase2["🔄 Phase 2: Resolution Scaling<br/>Progressive Reduction"]
+    Scale["Try 90% → 80% → ... → 10%<br/>At each scale, find best quality"]
+    
+    Decision2{{"Meets Target<br/>Size?"}}
+    
+    Floor["🛑 Apply Quality Floor<br/>Never drop below 25%"]
+    
+    Result["✅ Output Image<br/>Optimized for target size"]
+    End["📊 Return Stats<br/>Size, Resolution, Quality"]
+    
+    Start --> Input
+    Input --> Phase1
+    Phase1 --> Quality_Search
+    Quality_Search --> Decision1
+    
+    Decision1 -->|Yes| Floor
+    Decision1 -->|No| Phase2
+    
+    Phase2 --> Scale
+    Scale --> Decision2
+    
+    Decision2 -->|Yes| Floor
+    Decision2 -->|No| Floor
+    
+    Floor --> Result
+    Result --> End
+```
+
 ## Quick Start
 
 ### Using Docker Hub Image (Recommended)
