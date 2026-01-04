@@ -1,6 +1,6 @@
-# Keis ImageCompress
+# ImageCompress
 
-A cyberpunk-themed web application for batch compressing JPG and PNG images to a target file size while maintaining optimal quality for you website/blog. Features a **Cyberpunk 2077-inspired** neon UI with glowing cyan accents, yellow highlights, and enough visual glitch effects to make your images feel like they're being processed in Night City. Available as a Docker image for easy deployment.
+A sleek, modern web application for batch compressing JPG and PNG images to a target file size while maintaining optimal quality. Features a **clean, contemporary UI** with a purple-to-pink gradient, cyan accents, and smooth interactions. Available as a Docker image for easy deployment.
 
 [![Docker Hub](https://img.shields.io/docker/pulls/anderskeis/pycompressweb?style=flat-square)](https://hub.docker.com/r/anderskeis/pycompressweb)
 
@@ -16,7 +16,7 @@ A cyberpunk-themed web application for batch compressing JPG and PNG images to a
 - Temporary files stored on disk
 - Session IDs are predictable UUIDs
 
-Keep it behind your firewall, choom. Netrunners are everywhere.
+Keep it behind your firewall.
 
 ## Features
 
@@ -28,7 +28,7 @@ Keep it behind your firewall, choom. Netrunners are everywhere.
 - 📊 **Detailed Results**: See compression stats for each image (size, resolution, quality used)
 - 📦 **ZIP Download**: Download all compressed images in a single ZIP file
 - 🗑️ **Clear & Reset**: Clear selected files or start a new session with cache cleanup
-- 🎨 **Cyberpunk UI**: Night City-inspired interface with neon glows, glitch effects, and Orbitron typography
+- 🎨 **Modern UI**: Clean, contemporary interface with purple gradients, cyan accents, and smooth animations
 - 🐳 **Docker Ready**: Multi-platform Docker image (amd64 & arm64)
 
 ## How It Works
