@@ -1,8 +1,6 @@
 # Keis ImageCompress
 
-> *"In 2077, what makes someone a criminal? Getting caught with uncompressed images."*
-
-A cyberpunk-themed web application for batch compressing JPG and PNG images to a target file size while maintaining optimal quality. Features a **Cyberpunk 2077-inspired** neon UI with glowing cyan accents, yellow highlights, and enough visual glitch effects to make your images feel like they're being processed in Night City. Available as a Docker image for easy deployment.
+A cyberpunk-themed web application for batch compressing JPG and PNG images to a target file size while maintaining optimal quality for you website/blog. Features a **Cyberpunk 2077-inspired** neon UI with glowing cyan accents, yellow highlights, and enough visual glitch effects to make your images feel like they're being processed in Night City. Available as a Docker image for easy deployment.
 
 [![Docker Hub](https://img.shields.io/docker/pulls/anderskeis/pycompressweb?style=flat-square)](https://hub.docker.com/r/anderskeis/pycompressweb)
 
