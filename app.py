@@ -38,11 +38,16 @@ def is_valid_session_id(session_id):
 UPLOAD_FOLDER = '/tmp/pycompressweb/uploads'
 OUTPUT_FOLDER = '/tmp/pycompressweb/output'
 ALLOWED_EXTENSIONS = {'jpg', 'jpeg', 'png'}
-MAX_CONTENT_LENGTH = 100 * 1024 * 1024  # 100MB max total upload
+MAX_CONTENT_LENGTH = 500 * 1024 * 1024  # 500MB max total upload to handle multiple large files
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['OUTPUT_FOLDER'] = OUTPUT_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = MAX_CONTENT_LENGTH
+
+@app.errorhandler(413)
+def request_entity_too_large(error):
+    """Handle large file uploads gracefully."""
+    return jsonify({'error': 'File too large. Maximum upload size is 500MB.'}), 413
 
 # Store session data (in production, use Redis or similar)
 sessions = {}
@@ -142,6 +147,14 @@ def compress_to_target_size(image_path, target_kb, output_path, output_format='o
             new_height = int(height * scale)
             current_image = original_image.resize((new_width, new_height), Image.LANCZOS)
         
+        # optimization: check if lowest quality is already too big at this scale
+        # This saves doing the full binary search if there's no hope for this scale
+        min_quality_check = 25
+        min_size_at_scale = get_file_size_kb(current_image, min_quality_check, save_format)
+        
+        if min_size_at_scale > target_kb:
+            continue
+
         # Binary search for optimal quality at this resolution
         min_quality = 25
         max_quality = 95
