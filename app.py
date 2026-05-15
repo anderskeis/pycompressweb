@@ -10,6 +10,9 @@ import uuid
 import logging
 import zipfile
 import shutil
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, jsonify, send_file
 from werkzeug.utils import secure_filename
@@ -58,22 +61,22 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 
-def get_file_size_kb(image, quality, format='JPEG'):
-    """Get the file size in KB for an image at given quality."""
+def encode_image(image, quality, format='JPEG'):
+    """Encode image to a BytesIO buffer and return (size_kb, buffer)."""
     buffer = io.BytesIO()
     if format == 'PNG':
-        # PNG uses compress_level (0-9) instead of quality
         compress_level = max(1, min(9, 9 - (quality // 11)))
         image.save(buffer, format=format, optimize=True, compress_level=compress_level)
     else:
         image.save(buffer, format=format, quality=quality, optimize=True)
-    return buffer.tell() / 1024
+    return buffer.tell() / 1024, buffer
 
 
 def compress_to_target_size(image_path, target_kb, output_path, output_format='original'):
     """
     Compress image to target KB size with best possible quality.
-    Uses binary search to find optimal quality, then reduces resolution if needed.
+    Uses binary search on both scale factor and quality for fast convergence,
+    and reuses the encoded buffer to avoid redundant encoding.
     
     Args:
         image_path: Path to source image
@@ -137,69 +140,92 @@ def compress_to_target_size(image_path, target_kb, output_path, output_format='o
         result['output_filename'] = os.path.basename(output_path)
         return result
     
-    current_image = original_image.copy()
-    scale_factor = 1.0
-    
-    # Try different scale factors (100%, 90%, 80%, ..., 10%)
-    for scale in [1.0, 0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1]:
-        if scale < 1.0:
-            new_width = int(width * scale)
-            new_height = int(height * scale)
-            current_image = original_image.resize((new_width, new_height), Image.LANCZOS)
-        
-        # optimization: check if lowest quality is already too big at this scale
-        # This saves doing the full binary search if there's no hope for this scale
-        min_quality_check = 25
-        min_size_at_scale = get_file_size_kb(current_image, min_quality_check, save_format)
-        
-        if min_size_at_scale > target_kb:
-            continue
-
-        # Binary search for optimal quality at this resolution
-        min_quality = 25
-        max_quality = 95
-        best_quality = min_quality
+    def find_best_quality(image, save_fmt, target):
+        """Binary search for best quality that fits target. Returns (quality, size, buffer) or None."""
+        min_q, max_q = 25, 95
+        best_quality = None
         best_size = float('inf')
+        best_buffer = None
         
-        while min_quality <= max_quality:
-            mid_quality = (min_quality + max_quality) // 2
-            size_kb = get_file_size_kb(current_image, mid_quality, save_format)
+        # Early exit: if minimum quality is already too big, no solution at this scale
+        min_size, _ = encode_image(image, min_q, save_fmt)
+        if min_size > target:
+            return None
+        
+        while min_q <= max_q:
+            mid_q = (min_q + max_q) // 2
+            size_kb, buf = encode_image(image, mid_q, save_fmt)
             
-            if size_kb <= target_kb:
-                best_quality = mid_quality
+            if size_kb <= target:
+                best_quality = mid_q
                 best_size = size_kb
-                min_quality = mid_quality + 1  # Try higher quality
+                best_buffer = buf
+                min_q = mid_q + 1
             else:
-                max_quality = mid_quality - 1  # Try lower quality
+                max_q = mid_q - 1
         
-        # Check if we found a valid solution at this scale
-        if best_size <= target_kb:
-            scale_factor = scale
-            # Save the result
-            if save_format == 'PNG':
-                compress_level = max(1, min(9, 9 - (best_quality // 11)))
-                current_image.save(output_path, 'PNG', optimize=True, compress_level=compress_level)
-            else:
-                current_image.save(output_path, 'JPEG', quality=best_quality, optimize=True)
-            final_size = os.path.getsize(output_path) / 1024
-            
-            result['final_size_kb'] = round(final_size, 2)
-            new_w, new_h = current_image.size
-            result['final_resolution'] = f'{new_w}x{new_h}'
-            result['quality_used'] = best_quality
-            result['scale_factor'] = scale_factor
-            result['output_filename'] = os.path.basename(output_path)
-            return result
+        if best_quality is not None:
+            return best_quality, best_size, best_buffer
+        return None
+
+    # Try quality-only first (scale=1.0)
+    quality_result = find_best_quality(original_image, save_format, target_kb)
+    if quality_result:
+        best_quality, best_size, best_buffer = quality_result
+        best_buffer.seek(0)
+        with open(output_path, 'wb') as f:
+            f.write(best_buffer.read())
+        result['final_size_kb'] = round(best_size, 2)
+        result['final_resolution'] = f'{width}x{height}'
+        result['quality_used'] = best_quality
+        result['scale_factor'] = 1.0
+        result['output_filename'] = os.path.basename(output_path)
+        return result
+    
+    # Binary search on scale factors (0.1 to 0.9) to find the largest viable scale
+    scale_lo, scale_hi = 1, 9  # represents 0.1 to 0.9
+    best_scale_result = None
+    
+    while scale_lo <= scale_hi:
+        scale_mid = (scale_lo + scale_hi) // 2
+        scale = scale_mid / 10.0
+        new_w = int(width * scale)
+        new_h = int(height * scale)
+        if new_w < 1 or new_h < 1:
+            scale_lo = scale_mid + 1
+            continue
+        
+        scaled_image = original_image.resize((new_w, new_h), Image.LANCZOS)
+        quality_result = find_best_quality(scaled_image, save_format, target_kb)
+        
+        if quality_result:
+            best_scale_result = (scale, scaled_image, quality_result)
+            scale_lo = scale_mid + 1  # try larger scale (higher value = less downscaling)
+        else:
+            scale_hi = scale_mid - 1  # need smaller scale (more downscaling)
+    
+    if best_scale_result:
+        scale, scaled_image, (best_quality, best_size, best_buffer) = best_scale_result
+        best_buffer.seek(0)
+        with open(output_path, 'wb') as f:
+            f.write(best_buffer.read())
+        new_w, new_h = scaled_image.size
+        result['final_size_kb'] = round(best_size, 2)
+        result['final_resolution'] = f'{new_w}x{new_h}'
+        result['quality_used'] = best_quality
+        result['scale_factor'] = scale
+        result['output_filename'] = os.path.basename(output_path)
+        return result
     
     # Fallback: use minimum quality at minimum scale
     min_scale_image = original_image.resize(
-        (int(width * 0.1), int(height * 0.1)), 
+        (max(1, int(width * 0.1)), max(1, int(height * 0.1))),
         Image.LANCZOS
     )
-    if save_format == 'PNG':
-        min_scale_image.save(output_path, 'PNG', optimize=True, compress_level=9)
-    else:
-        min_scale_image.save(output_path, 'JPEG', quality=25, optimize=True)
+    _, fallback_buffer = encode_image(min_scale_image, 25, save_format)
+    fallback_buffer.seek(0)
+    with open(output_path, 'wb') as f:
+        f.write(fallback_buffer.read())
     final_size = os.path.getsize(output_path) / 1024
     
     result['final_size_kb'] = round(final_size, 2)
@@ -212,22 +238,40 @@ def compress_to_target_size(image_path, target_kb, output_path, output_format='o
     return result
 
 
+_last_cleanup_time = 0.0
+_cleanup_lock = threading.Lock()
+_CLEANUP_INTERVAL_SECONDS = 60
+
+
 def cleanup_old_sessions(max_age_hours=1):
-    """Remove session folders older than max_age_hours."""
-    cutoff = datetime.now() - timedelta(hours=max_age_hours)
+    """Remove session folders older than max_age_hours. Rate-limited to once per minute."""
+    global _last_cleanup_time
     
-    cleaned_count = 0
-    for folder in [UPLOAD_FOLDER, OUTPUT_FOLDER]:
-        if os.path.exists(folder):
-            for session_id in os.listdir(folder):
-                session_path = os.path.join(folder, session_id)
-                if os.path.isdir(session_path):
-                    mtime = datetime.fromtimestamp(os.path.getmtime(session_path))
-                    if mtime < cutoff:
-                        shutil.rmtree(session_path, ignore_errors=True)
-                        cleaned_count += 1
-    if cleaned_count > 0:
-        logger.debug(f'Cleaned up {cleaned_count} expired session folders')
+    now = time.monotonic()
+    if now - _last_cleanup_time < _CLEANUP_INTERVAL_SECONDS:
+        return
+    
+    # Use a lock so only one thread runs cleanup at a time
+    if not _cleanup_lock.acquire(blocking=False):
+        return
+    try:
+        _last_cleanup_time = now
+        cutoff = datetime.now() - timedelta(hours=max_age_hours)
+        
+        cleaned_count = 0
+        for folder in [UPLOAD_FOLDER, OUTPUT_FOLDER]:
+            if os.path.exists(folder):
+                for session_id in os.listdir(folder):
+                    session_path = os.path.join(folder, session_id)
+                    if os.path.isdir(session_path):
+                        mtime = datetime.fromtimestamp(os.path.getmtime(session_path))
+                        if mtime < cutoff:
+                            shutil.rmtree(session_path, ignore_errors=True)
+                            cleaned_count += 1
+        if cleaned_count > 0:
+            logger.debug(f'Cleaned up {cleaned_count} expired session folders')
+    finally:
+        _cleanup_lock.release()
 
 
 @app.route('/')
@@ -271,6 +315,8 @@ def upload_files():
     results = []
     processed_count = 0
     
+    # Save all uploaded files first, then compress in parallel
+    compress_jobs = []
     for file in files:
         if file and file.filename and allowed_file(file.filename):
             filename = secure_filename(file.filename)
@@ -288,24 +334,35 @@ def upload_files():
             
             # Save uploaded file
             file.save(input_file)
-            
-            try:
-                # Compress the image
-                compression_result = compress_to_target_size(input_file, target_kb, output_file, output_format)
-                compression_result['filename'] = compression_result.get('output_filename', filename)
-                compression_result['original_filename'] = original_filename
-                compression_result['success'] = True
-                results.append(compression_result)
-                processed_count += 1
-                logger.info(f'Compressed {filename}: {compression_result["original_size_kb"]}KB → {compression_result["final_size_kb"]}KB (quality={compression_result["quality_used"]}, scale={compression_result["scale_factor"]})')
-            except Exception as e:
-                logger.error(f'Failed to compress {filename}: {str(e)}')
-                results.append({
-                    'filename': filename,
-                    'original_filename': original_filename,
-                    'success': False,
-                    'error': str(e)
-                })
+            compress_jobs.append((input_file, target_kb, output_file, output_format, filename, original_filename))
+    
+    def _compress_one(job):
+        input_file, t_kb, output_file, out_fmt, filename, original_filename = job
+        try:
+            compression_result = compress_to_target_size(input_file, t_kb, output_file, out_fmt)
+            compression_result['filename'] = compression_result.get('output_filename', filename)
+            compression_result['original_filename'] = original_filename
+            compression_result['success'] = True
+            logger.info(f'Compressed {filename}: {compression_result["original_size_kb"]}KB → {compression_result["final_size_kb"]}KB (quality={compression_result["quality_used"]}, scale={compression_result["scale_factor"]})')
+            return compression_result
+        except Exception as e:
+            logger.error(f'Failed to compress {filename}: {str(e)}')
+            return {
+                'filename': filename,
+                'original_filename': original_filename,
+                'success': False,
+                'error': str(e)
+            }
+    
+    # Compress images in parallel using threads (Pillow releases the GIL for C operations)
+    max_workers = min(len(compress_jobs), os.cpu_count() or 2)
+    if max_workers > 1:
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            results = list(executor.map(_compress_one, compress_jobs))
+    else:
+        results = [_compress_one(job) for job in compress_jobs]
+    
+    processed_count = sum(1 for r in results if r.get('success'))
     
     if processed_count == 0:
         # Cleanup empty session folders
