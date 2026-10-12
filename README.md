@@ -4,6 +4,8 @@ Batch-compress JPG and PNG images to a target file size in your browser. No uplo
 
 [![Docker Hub](https://img.shields.io/docker/pulls/anderskeis/pycompressweb?style=flat-square)](https://hub.docker.com/r/anderskeis/pycompressweb)
 
+![ImageCompress UI](assets/screenshot.png)
+
 ## Quick Start
 
 ```bash
@@ -34,6 +36,8 @@ pip install -r requirements.txt && python app.py
 6. Click **New Session** to start fresh
 
 **Shortcuts**: Ctrl+V paste · Esc clear files · Ctrl+Enter compress
+
+![Compression Results](assets/screenshot-results.png)
 
 ## Features
 
