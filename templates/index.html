@@ -401,6 +401,149 @@
             padding: 8px 12px;
         }
 
+        /* Presets */
+        .presets-row {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-top: 12px;
+        }
+
+        .preset-btn {
+            padding: 6px 14px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--bg-darker);
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            font-family: 'Inter', sans-serif;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .preset-btn:hover {
+            border-color: var(--primary-purple);
+            color: var(--text-primary);
+            background: var(--bg-card);
+        }
+
+        .preset-btn.active {
+            border-color: var(--primary-purple);
+            background: rgba(124, 58, 237, 0.15);
+            color: var(--primary-purple);
+        }
+
+        /* Total size indicator */
+        .total-size-bar {
+            margin-top: 12px;
+            display: none;
+        }
+
+        .total-size-bar.visible {
+            display: block;
+        }
+
+        .total-size-text {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .total-size-text.warning {
+            color: var(--error);
+        }
+
+        .total-size-track {
+            height: 4px;
+            background: var(--bg-darker);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .total-size-fill {
+            height: 100%;
+            background: var(--primary-gradient);
+            border-radius: 2px;
+            transition: width 0.3s ease;
+        }
+
+        .total-size-fill.warning {
+            background: var(--error);
+        }
+
+        /* Progress bar in overlay */
+        .progress-bar-track {
+            width: 280px;
+            height: 6px;
+            background: var(--bg-darker);
+            border-radius: 3px;
+            margin: 20px auto 0;
+            overflow: hidden;
+            display: none;
+        }
+
+        .progress-bar-track.visible {
+            display: block;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background: var(--primary-gradient);
+            border-radius: 3px;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .progress-detail {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-top: 12px;
+            min-height: 1.2em;
+        }
+
+        /* Individual download button in results */
+        .result-download {
+            background: none;
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 4px;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 0.75rem;
+            font-family: 'Inter', sans-serif;
+            text-decoration: none;
+            margin-left: auto;
+            flex-shrink: 0;
+        }
+
+        .result-download:hover {
+            border-color: var(--primary-cyan);
+            color: var(--primary-cyan);
+            background: rgba(6, 182, 212, 0.1);
+        }
+
+        .result-header-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .result-header-row .result-filename {
+            margin-bottom: 0;
+            flex: 1;
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
         /* File List */
         .file-list {
             margin-top: 24px;
@@ -472,8 +615,32 @@
             font-size: 1.2rem;
         }
 
-        flex: 1;
-        min-width: 0;
+        .file-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .file-thumb {
+            width: 48px;
+            height: 48px;
+            object-fit: cover;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            flex-shrink: 0;
+            background: var(--bg-darker);
+        }
+
+        .file-thumb-placeholder {
+            width: 48px;
+            height: 48px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--bg-darker);
+            color: var(--text-muted);
         }
 
         .file-name {
@@ -842,7 +1009,7 @@
                     </svg>
                 </div>
                 <div class="drop-zone-text">Drop your images here</div>
-                <div class="drop-zone-hint">or click to browse from your computer</div>
+                <div class="drop-zone-hint">or click to browse — you can also paste from clipboard (Ctrl+V)</div>
                 <div class="drop-zone-formats">
                     <span class="format-badge">JPG</span>
                     <span class="format-badge">JPEG</span>
@@ -867,6 +1034,13 @@
                 <div class="setting-group">
                     <label for="targetSize">Target Size (KB)</label>
                     <input type="number" id="targetSize" value="200" min="10" max="10000" step="10">
+                    <div class="presets-row" id="presetsRow">
+                        <button class="preset-btn" data-size="50">50 KB</button>
+                        <button class="preset-btn" data-size="100">100 KB</button>
+                        <button class="preset-btn active" data-size="200">200 KB</button>
+                        <button class="preset-btn" data-size="500">500 KB</button>
+                        <button class="preset-btn" data-size="1000">1 MB</button>
+                    </div>
                 </div>
                 <div class="setting-group">
                     <label for="outputFormat">Output Format</label>
@@ -875,6 +1049,16 @@
                         <option value="jpg">Convert to JPG</option>
                         <option value="png">Convert to PNG</option>
                     </select>
+                </div>
+            </div>
+
+            <div class="total-size-bar" id="totalSizeBar">
+                <div class="total-size-text" id="totalSizeText">
+                    <span>Total upload size</span>
+                    <span id="totalSizeValue">0 KB</span>
+                </div>
+                <div class="total-size-track">
+                    <div class="total-size-fill" id="totalSizeFill" style="width: 0%"></div>
                 </div>
             </div>
 
@@ -947,6 +1131,7 @@
 
     <footer>
         <p>// Powered by Flask & Pillow | Auto-cleanup: 1 hour</p>
+        <p style="margin-top: 8px; font-size: 0.75rem;">Shortcuts: Ctrl+V paste images • Esc clear files • Ctrl+Enter compress</p>
         <p style="margin-top: 12px;">
             <a href="https://github.com/anderskeis/pycompressweb" target="_blank">[ GitHub Repository ]</a>
         </p>
@@ -956,13 +1141,19 @@
         <div class="progress-card">
             <div class="spinner"></div>
             <div class="progress-text">Compressing images...</div>
+            <div class="progress-bar-track visible" id="progressBarTrack">
+                <div class="progress-bar-fill" id="progressBarFill"></div>
+            </div>
+            <div class="progress-detail" id="progressDetail"></div>
         </div>
     </div>
 
     <script>
         // State
         let selectedFiles = [];
+        let fileThumbnails = {};  // Map of file index -> thumbnail data URL
         let currentSessionId = null;
+        const MAX_UPLOAD_BYTES = 500 * 1024 * 1024;  // 500MB server limit
 
         // DOM Elements
         const dropZone = document.getElementById('dropZone');
@@ -980,7 +1171,14 @@
         const clearFilesBtn = document.getElementById('clearFilesBtn');
         const clearAllBtn = document.getElementById('clearAllBtn');
         const progressOverlay = document.getElementById('progressOverlay');
+        const progressBarFill = document.getElementById('progressBarFill');
+        const progressDetail = document.getElementById('progressDetail');
         const errorMessage = document.getElementById('errorMessage');
+        const totalSizeBar = document.getElementById('totalSizeBar');
+        const totalSizeText = document.getElementById('totalSizeText');
+        const totalSizeValue = document.getElementById('totalSizeValue');
+        const totalSizeFill = document.getElementById('totalSizeFill');
+        const presetsRow = document.getElementById('presetsRow');
 
         // Event Listeners
         dropZone.addEventListener('click', () => fileInput.click());
@@ -1004,11 +1202,70 @@
             handleFiles(e.target.files);
         });
 
+        // Paste from clipboard support
+        document.addEventListener('paste', (e) => {
+            const items = e.clipboardData?.items;
+            if (!items) return;
+            const pastedFiles = [];
+            for (const item of items) {
+                if (item.type.startsWith('image/')) {
+                    const file = item.getAsFile();
+                    if (file) {
+                        // Give pasted images a meaningful name
+                        const ext = file.type.split('/')[1].replace('jpeg', 'jpg');
+                        const namedFile = new File([file], `pasted-image-${Date.now()}.${ext}`, { type: file.type });
+                        pastedFiles.push(namedFile);
+                    }
+                }
+            }
+            if (pastedFiles.length > 0) {
+                handleFiles(pastedFiles);
+            }
+        });
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            // Ctrl/Cmd + V is handled by paste event above
+            // Escape to clear all files
+            if (e.key === 'Escape' && selectedFiles.length > 0) {
+                clearAllFiles();
+            }
+            // Ctrl/Cmd + Enter to compress
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter' && selectedFiles.length > 0 && !compressBtn.disabled) {
+                e.preventDefault();
+                compressImages();
+            }
+        });
+
         compressBtn.addEventListener('click', compressImages);
         downloadBtn.addEventListener('click', downloadZip);
         newSessionBtn.addEventListener('click', startNewSession);
         clearFilesBtn.addEventListener('click', clearAllFiles);
         clearAllBtn.addEventListener('click', clearAllFiles);
+
+        // Preset buttons
+        presetsRow.addEventListener('click', (e) => {
+            const btn = e.target.closest('.preset-btn');
+            if (!btn) return;
+            const size = btn.dataset.size;
+            targetSize.value = size;
+            presetsRow.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+        });
+
+        // Sync preset highlight when manually editing target size
+        targetSize.addEventListener('input', () => {
+            const val = targetSize.value;
+            let matched = false;
+            presetsRow.querySelectorAll('.preset-btn').forEach(b => {
+                if (b.dataset.size === val) {
+                    b.classList.add('active');
+                    matched = true;
+                } else {
+                    b.classList.remove('active');
+                }
+            });
+        });
 
         // Functions
         function handleFiles(files) {
@@ -1025,9 +1282,41 @@
                 return;
             }
 
+            // Check total size against server limit
+            const currentTotal = selectedFiles.reduce((sum, f) => sum + f.size, 0);
+            const newTotal = validFiles.reduce((sum, f) => sum + f.size, 0);
+            if (currentTotal + newTotal > MAX_UPLOAD_BYTES) {
+                showError(`Total upload size would exceed 500MB limit. Please remove some files.`);
+                return;
+            }
+
             selectedFiles = [...selectedFiles, ...validFiles];
             updateFileList();
             hideError();
+        }
+
+        function generateThumbnail(file, index) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const maxDim = 96;
+                    const scale = Math.min(maxDim / img.width, maxDim / img.height, 1);
+                    canvas.width = Math.round(img.width * scale);
+                    canvas.height = Math.round(img.height * scale);
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    fileThumbnails[index] = canvas.toDataURL('image/jpeg', 0.7);
+                    // Update the thumbnail in the DOM if the file list is rendered
+                    const thumbEl = document.querySelector(`[data-thumb-index="${index}"]`);
+                    if (thumbEl) {
+                        thumbEl.outerHTML = `<img class="file-thumb" data-thumb-index="${index}" src="${fileThumbnails[index]}" alt="">`;
+                    }
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
         }
 
         function updateFileList() {
@@ -1035,6 +1324,8 @@
                 fileList.classList.remove('visible');
                 clearFilesBtn.style.display = 'none';
                 compressBtn.disabled = true;
+                totalSizeBar.classList.remove('visible');
+                fileThumbnails = {};
                 return;
             }
 
@@ -1043,11 +1334,24 @@
             fileCount.textContent = selectedFiles.length;
             compressBtn.disabled = false;
 
-            fileItems.innerHTML = selectedFiles.map((file, index) => `
+            // Generate thumbnails for new files
+            selectedFiles.forEach((file, index) => {
+                if (!fileThumbnails[index]) {
+                    generateThumbnail(file, index);
+                }
+            });
+
+            fileItems.innerHTML = selectedFiles.map((file, index) => {
+                const thumbHtml = fileThumbnails[index]
+                    ? `<img class="file-thumb" data-thumb-index="${index}" src="${fileThumbnails[index]}" alt="">`
+                    : `<div class="file-thumb-placeholder" data-thumb-index="${index}">
+                        <svg class="icon sm" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                        </svg>
+                    </div>`;
+                return `
                 <div class="file-item">
-                    <svg class="icon sm icon-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
-                    </svg>
+                    ${thumbHtml}
                     <div class="file-info">
                         <div class="file-name">${escapeHtml(file.name)}</div>
                         <div class="file-meta">${formatSize(file.size)} • ${file.type.split('/')[1].toUpperCase()}</div>
@@ -1058,17 +1362,40 @@
                         </svg>
                     </button>
                 </div>
-            `).join('');
+            `;
+            }).join('');
+
+            updateTotalSizeBar();
+        }
+
+        function updateTotalSizeBar() {
+            const totalBytes = selectedFiles.reduce((sum, f) => sum + f.size, 0);
+            const pct = Math.min(100, (totalBytes / MAX_UPLOAD_BYTES) * 100);
+            const isWarning = totalBytes > MAX_UPLOAD_BYTES * 0.9;
+
+            totalSizeBar.classList.add('visible');
+            totalSizeValue.textContent = formatSize(totalBytes);
+            totalSizeFill.style.width = pct + '%';
+            totalSizeText.classList.toggle('warning', isWarning);
+            totalSizeFill.classList.toggle('warning', isWarning);
         }
 
         function removeFile(index) {
             selectedFiles.splice(index, 1);
+            // Rebuild thumbnails map since indices shift
+            const newThumbnails = {};
+            selectedFiles.forEach((file, i) => {
+                // Thumbnails will be regenerated for shifted indices
+                generateThumbnail(file, i);
+            });
+            fileThumbnails = {};
             updateFileList();
         }
 
         function clearAllFiles() {
             selectedFiles = [];
             fileInput.value = '';
+            fileThumbnails = {};
             updateFileList();
             hideError();
         }
@@ -1094,6 +1421,13 @@
             errorMessage.classList.remove('visible');
         }
 
+        function updateProgress(percent, detail) {
+            progressBarFill.style.width = percent + '%';
+            if (detail) {
+                progressDetail.textContent = detail;
+            }
+        }
+
         async function compressImages() {
             if (selectedFiles.length === 0) return;
 
@@ -1104,6 +1438,7 @@
             }
 
             progressOverlay.classList.add('visible');
+            updateProgress(5, `Uploading ${selectedFiles.length} file${selectedFiles.length > 1 ? 's' : ''}...`);
             hideError();
 
             const formData = new FormData();
@@ -1113,11 +1448,17 @@
             formData.append('target_kb', target);
             formData.append('output_format', outputFormat.value);
 
+            // Simulate upload progress (actual compression happens server-side)
+            updateProgress(15, 'Uploading...');
+
             try {
                 const response = await fetch('/upload', {
                     method: 'POST',
                     body: formData
                 });
+
+                // Upload complete, compression happening
+                updateProgress(50, 'Compressing images...');
 
                 const data = await response.json();
 
@@ -1125,18 +1466,23 @@
                     throw new Error(data.error || 'Compression failed');
                 }
 
+                updateProgress(100, 'Done!');
                 currentSessionId = data.session_id;
                 displayResults(data);
 
                 // Clear selected files
                 selectedFiles = [];
+                fileThumbnails = {};
                 updateFileList();
                 fileInput.value = '';
 
             } catch (error) {
                 showError(error.message);
             } finally {
-                progressOverlay.classList.remove('visible');
+                setTimeout(() => {
+                    progressOverlay.classList.remove('visible');
+                    updateProgress(0, '');
+                }, 500);
             }
         }
 
@@ -1169,9 +1515,18 @@
             resultItems.innerHTML = data.results.map(result => {
                 if (result.success) {
                     const reduction = Math.round((1 - result.final_size_kb / result.original_size_kb) * 100);
+                    const downloadUrl = `/download/${currentSessionId}/${encodeURIComponent(result.filename)}`;
                     return `
                         <div class="result-item">
-                            <div class="result-filename">${escapeHtml(result.filename)}</div>
+                            <div class="result-header-row">
+                                <div class="result-filename">${escapeHtml(result.filename)}</div>
+                                <a class="result-download" href="${downloadUrl}" title="Download this file">
+                                    <svg class="icon sm" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="width:14px;height:14px;">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                                    </svg>
+                                    Download
+                                </a>
+                            </div>
                             <div class="result-details">
                                 <div class="result-detail">
                                     <span class="result-label">Original</span>
@@ -1197,7 +1552,7 @@
                         <div class="result-item error">
                             <div class="result-filename">${escapeHtml(result.filename)}</div>
                             <div class="result-details">
-                                <span class="result-value" style="color: var(--danger);">Error: ${escapeHtml(result.error)}</span>
+                                <span class="result-value" style="color: var(--error);">Error: ${escapeHtml(result.error)}</span>
                             </div>
                         </div>
                     `;
@@ -1231,6 +1586,7 @@
             // Reset UI
             currentSessionId = null;
             selectedFiles = [];
+            fileThumbnails = {};
             fileInput.value = '';
             updateFileList();
             resultsSection.classList.remove('visible');
