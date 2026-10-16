@@ -434,6 +434,65 @@
             color: var(--primary-purple);
         }
 
+        /* Profile (Blog preset) */
+        .profile-row {
+            display: flex;
+            margin-top: 28px;
+        }
+
+        .profile-btn {
+            display: inline-flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 2px;
+            padding: 10px 16px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg-darker);
+            color: var(--text-primary);
+            font-family: 'Sohne', sans-serif;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .profile-btn:hover {
+            border-color: var(--primary-purple);
+            background: var(--bg-card);
+        }
+
+        .profile-btn.active {
+            border-color: var(--primary-purple);
+            background: rgba(124, 58, 237, 0.15);
+            box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1);
+        }
+
+        .profile-hint {
+            font-family: 'Inter', sans-serif;
+            font-size: 0.75rem;
+            font-weight: 400;
+            color: var(--text-muted);
+        }
+
+        .setting-hint {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+
+        .result-warning {
+            margin-top: 8px;
+            font-size: 0.8rem;
+            color: #f59e0b;
+        }
+
+        .result-meta {
+            margin-top: 8px;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
         /* Total size indicator */
         .total-size-bar {
             margin-top: 12px;
@@ -1030,6 +1089,14 @@
                 <div class="file-items" id="fileItems"></div>
             </div>
 
+            <div class="profile-row">
+                <button type="button" class="profile-btn" id="blogPresetBtn"
+                    title="WebP · max 2400 px · 250 KB · min quality 70 · keep camera info (GPS removed)">
+                    Blog preset
+                    <span class="profile-hint">WebP · 2400 px · 250 KB · q≥70 · camera info</span>
+                </button>
+            </div>
+
             <div class="settings-grid">
                 <div class="setting-group">
                     <label for="targetSize">Target Size (KB)</label>
@@ -1045,10 +1112,35 @@
                 <div class="setting-group">
                     <label for="outputFormat">Output Format</label>
                     <select id="outputFormat">
-                        <option value="original">Keep Original</option>
-                        <option value="jpg">Convert to JPG</option>
-                        <option value="png">Convert to PNG</option>
+                        <option value="webp" selected>WebP</option>
+                        <option value="jpeg">Progressive JPEG</option>
                     </select>
+                    <span class="setting-hint">WebP is smaller and keeps transparency. JPEG flattens it onto white.</span>
+                </div>
+                <div class="setting-group">
+                    <label for="maxEdge">Max Long Edge</label>
+                    <select id="maxEdge">
+                        <option value="0" selected>Off (keep size)</option>
+                        <option value="1600">1600 px</option>
+                        <option value="2048">2048 px</option>
+                        <option value="2400">2400 px</option>
+                        <option value="3000">3000 px</option>
+                        <option value="4000">4000 px</option>
+                    </select>
+                    <span class="setting-hint">Resize before compressing. Never upscales.</span>
+                </div>
+                <div class="setting-group">
+                    <label for="minQuality">Min Quality</label>
+                    <input type="number" id="minQuality" value="70" min="10" max="95" step="5">
+                    <span class="setting-hint">If the target can't be met above this, the image is shrunk instead.</span>
+                </div>
+                <div class="setting-group">
+                    <label for="exifMode">Metadata</label>
+                    <select id="exifMode">
+                        <option value="strip" selected>Strip all</option>
+                        <option value="camera">Keep camera info (GPS removed)</option>
+                    </select>
+                    <span class="setting-hint">Colours are always converted to sRGB.</span>
                 </div>
             </div>
 
@@ -1179,6 +1271,19 @@
         const totalSizeValue = document.getElementById('totalSizeValue');
         const totalSizeFill = document.getElementById('totalSizeFill');
         const presetsRow = document.getElementById('presetsRow');
+        const maxEdge = document.getElementById('maxEdge');
+        const minQuality = document.getElementById('minQuality');
+        const exifMode = document.getElementById('exifMode');
+        const blogPresetBtn = document.getElementById('blogPresetBtn');
+
+        // Blog preset: tuned for web publishing (see README "Blog preset")
+        const BLOG_PRESET = {
+            targetSize: '250',
+            outputFormat: 'webp',
+            maxEdge: '2400',
+            minQuality: '70',
+            exifMode: 'camera',
+        };
 
         // Event Listeners
         dropZone.addEventListener('click', () => fileInput.click());
@@ -1252,6 +1357,31 @@
             presetsRow.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
         });
+
+        // Blog preset: fill every setting at once
+        blogPresetBtn.addEventListener('click', () => {
+            targetSize.value = BLOG_PRESET.targetSize;
+            outputFormat.value = BLOG_PRESET.outputFormat;
+            maxEdge.value = BLOG_PRESET.maxEdge;
+            minQuality.value = BLOG_PRESET.minQuality;
+            exifMode.value = BLOG_PRESET.exifMode;
+            targetSize.dispatchEvent(new Event('input'));
+            syncBlogPreset();
+        });
+
+        // Highlight the Blog preset only while every setting still matches it
+        function syncBlogPreset() {
+            const matches =
+                targetSize.value === BLOG_PRESET.targetSize &&
+                outputFormat.value === BLOG_PRESET.outputFormat &&
+                maxEdge.value === BLOG_PRESET.maxEdge &&
+                minQuality.value === BLOG_PRESET.minQuality &&
+                exifMode.value === BLOG_PRESET.exifMode;
+            blogPresetBtn.classList.toggle('active', matches);
+        }
+        [targetSize, minQuality].forEach(el => el.addEventListener('input', syncBlogPreset));
+        [outputFormat, maxEdge, exifMode].forEach(el => el.addEventListener('change', syncBlogPreset));
+        presetsRow.addEventListener('click', syncBlogPreset);
 
         // Sync preset highlight when manually editing target size
         targetSize.addEventListener('input', () => {
@@ -1437,6 +1567,12 @@
                 return;
             }
 
+            const minQ = parseInt(minQuality.value, 10);
+            if (!Number.isInteger(minQ) || minQ < 10 || minQ > 95) {
+                showError('Min quality must be between 10 and 95.');
+                return;
+            }
+
             progressOverlay.classList.add('visible');
             updateProgress(5, `Uploading ${selectedFiles.length} file${selectedFiles.length > 1 ? 's' : ''}...`);
             hideError();
@@ -1447,6 +1583,9 @@
             });
             formData.append('target_kb', target);
             formData.append('output_format', outputFormat.value);
+            formData.append('max_edge', maxEdge.value);
+            formData.append('min_quality', minQ);
+            formData.append('exif_mode', exifMode.value);
 
             // Simulate upload progress (actual compression happens server-side)
             updateProgress(15, 'Uploading...');
@@ -1545,6 +1684,13 @@
                                     <span class="result-value highlight">${reduction}%</span>
                                 </div>
                             </div>
+                            <div class="result-meta">
+                                ${escapeHtml(result.output_format)} · ${escapeHtml(result.color_profile)} · ${escapeHtml(result.metadata)}
+                            </div>
+                            ${result.target_met === false ? `
+                            <div class="result-warning">
+                                Couldn't reach the target at min quality ${result.quality_used}, even at the smallest size. Try a lower min quality or a larger target.
+                            </div>` : ''}
                         </div>
                     `;
                 } else {
