@@ -283,12 +283,14 @@ def compress_to_target_size(image_path, target_kb, output_path, output_format=DE
     if image.mode in ('I', 'I;16', 'I;16B', 'I;16L'):
         img_i = image.convert('I')
         l8 = img_i.point(lambda v: v / 256).convert('L')
+        l8.info.update(image.info)
         key = image.info.get('transparency')
         if key is not None and isinstance(key, int) and 0 <= key < 65536:
             lut = [255] * 65536
             lut[key] = 0
             alpha = img_i.point(lut, 'L')
             image = Image.merge('LA', (l8, alpha))
+            image.info.update(l8.info)
             image.info.pop('transparency', None)
         else:
             image = l8

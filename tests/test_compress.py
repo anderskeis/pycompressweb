@@ -3,6 +3,7 @@
 Run with:  python -m unittest discover -s tests
 """
 
+import base64
 import io
 import os
 import random
@@ -10,6 +11,7 @@ import shutil
 import sys
 import tempfile
 import unittest
+import zlib
 
 from PIL import Image, ImageCms, ImageDraw, TiffImagePlugin
 
@@ -20,6 +22,28 @@ from app import compress_to_target_size  # noqa: E402
 
 GPS_IFD = 0x8825
 EXIF_IFD = 0x8769
+
+# Valid Generic Gray ICC profile (zlib compressed) for grayscale color management tests
+GENERIC_GRAY_ICC = zlib.decompress(base64.b64decode("""
+eJyNVVts21QY/lM77kuxeIBt2qTNGpdNUVu5QxvtJmBZ0qVZSxrStNCBQJ7jJF4c29hOtlZ7QBMSPMEk
+EO9IwMOEAAkhMS5ifWEv4yJGBxN7GNKQOm1ISEh7GhPfOXZTJxGXE51zPv/38///ySEavK65rjWgEDXt
+wMuV0ovPLB5VBr+nAZJpiDA03XfTxeIMw7ZjG9Q3bl+mBNsvjTBb/fx/HcmK4evYz2M6FV9vEiVUImlB
+d72AaPBV0MdPBC7DTOa+RrmUAf4RWI502bg/Z9iGZ+pKztOWlKLnVE0rHut/8f/XaFqtdX87MIf8xtw0
+9hRifrmiZRl+EPgDXZucAx4G/qFtLhQifNcNDpVC+YFUqzGfDukD5ap3eD6iv1RvTTE8Cnx2uV5+Gvhe
+4J8bzjTT3QK8Zh8rzIa6Aul+5mjoVxiuG3lWJwUYJyzNRnS3YmQngfcDv2kG+XJoX/jWb89NRvjOcj1T
+CH2JqePakSLwJuD9hpUrhXbEohsUmc1x4MC2CjNhzOL7hs/Puxv4clAvT0XydwOvzHR3osw7q+bhfBhz
+Mlv3pkphPEl0DO+tfcBnvVaJnf1h4GuGPR/ZlCTNm8xFeJQWEhoZ5NAxrDrZ9BfO65NJbY5c8sCr4tui
+HCRsTA/TAq8G9BuNdMkUOT/EClXwFcqZsMkQs7DGv3XKbH+XWqDW6RaodaAn6RqnnKRfqYk9A2oLvFqP
+3Qx2m5ZJAw6juhHZdMTNoio+gnlAnBEfE8fFCVLEJ8SD4uNiFtQJ8QDX8aC7BKsbkbPobnQsvQi/8dhX
+IBFAx0JkNnR8nqVlugN+g0vGsnBma2u367712mnvBVP/7vU/Lpz6YkvMq7IqfvrcpaELp2IZZT4anZwG
+sMTo8czOxivEa1bprVDyenItuYr1SvJq3F/yl+RV/K70nZf5Xa+KEWUwDZ7FaU1Mk3P8jrUWcIC1ynVG
+uizGsdOxX8N0+rw4/3h2hlmeu05ftc9sdd3n32PZNF4p3C7Q6WH1I/WW+o76k/q7uqq+DXRTeEP4RPhS
+OCd8JlwkRTgvrAhfCV8LHwqf4+tjUFeEcz2dVOvunk7P6lGHMW7A652OZYVR1893HLyNSI2+O9Db/R1f
+8iF5m/yAnJV3yA/JM3JK3isflDfLezDH5Cl5FzjbOlmyogqwesXzbNIiz1VYJ5vfJg38JlYtFlcoG8t5
+4h7k2ey54es33+S3MexCB98azQOZdILr+rw+NuusPu1l7t1JPMsyKG4Xx8R8dAfT4l7cwumu+zjObmlX
+J+jxvu06qSFNSlkpTYqUkiakMekIwxuy0i5wJ7DiHzgwTgbsUck47pJn1uqBskdVH1XS+HM0lLytjw4r
+mmUpnOUrnuEbXtuojBJ7q8Pn6M+n+Buc2HRRb3nt6I1KJL4h+hsZl5Gt
+""".strip().encode('ascii')))
 
 
 def make_photo(width=3000, height=2000, mode='RGB', seed=1):
@@ -228,6 +252,30 @@ class CompressionTests(unittest.TestCase):
         with Image.open(self.out('img16.jpg')) as img:
             self.assertEqual(img.mode, 'RGB')
             self.assertTrue(all(c > 240 for c in img.getpixel((0, 0))))
+
+    def test_16bit_grayscale_png_with_trns_and_icc_profile(self):
+        # 16-bit grayscale PNG combining tRNS transparency and a grayscale ICC profile
+        img16 = Image.new('I;16', (100, 100), 32768)
+        img16.putpixel((50, 50), 1000)
+        src = self.out('img16_trns_icc.png')
+        img16.save(src, 'PNG', transparency=32768, icc_profile=GENERIC_GRAY_ICC)
+
+        # WebP: preserves alpha transparency and converts source grayscale profile to sRGB
+        r = compress_to_target_size(src, 500, self.out('img16_icc.webp'), 'webp')
+        with Image.open(self.out('img16_icc.webp')) as img:
+            self.assertEqual(img.mode, 'RGBA')
+            self.assertEqual(img.getpixel((0, 0))[3], 0)
+            self.assertEqual(img.getpixel((50, 50))[3], 255)
+        self.assertIn('converted from', r['color_profile'])
+        self.assertIn('Generic Gray', r['color_profile'])
+
+        # JPEG: transparent area flattened onto white and converted to sRGB
+        r_jpg = compress_to_target_size(src, 500, self.out('img16_icc.jpg'), 'jpeg')
+        with Image.open(self.out('img16_icc.jpg')) as img:
+            self.assertEqual(img.mode, 'RGB')
+            self.assertTrue(all(c > 240 for c in img.getpixel((0, 0))))
+        self.assertIn('converted from', r_jpg['color_profile'])
+        self.assertIn('Generic Gray', r_jpg['color_profile'])
 
     def test_jpeg_comment_is_cleared(self):
         # Source JPEG with embedded COM comment
