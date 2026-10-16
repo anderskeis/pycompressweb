@@ -141,6 +141,8 @@ def encode_image(image, quality, save_format, icc_profile=None, exif_bytes=None)
         params['progressive'] = True
         # Full chroma resolution at high quality, 4:2:0 otherwise
         params['subsampling'] = 0 if quality >= 90 else 2
+        # Explicitly clear JPEG comment marker (COM) so source comments are never retained
+        params['comment'] = b''
 
     image.save(buffer, format=save_format, **params)
     size_kb = buffer.tell() / 1024
@@ -277,16 +279,34 @@ def compress_to_target_size(image_path, target_kb, output_path, output_format=DE
     original_size_kb = os.path.getsize(image_path) / 1024
     orig_w, orig_h = image.size
 
-    # 16-bit greyscale PNGs: scale to 8-bit instead of clipping to white
+    # 16-bit greyscale PNGs: scale to 8-bit, extracting alpha mask if tRNS is present
     if image.mode in ('I', 'I;16', 'I;16B', 'I;16L'):
-        image = image.convert('I').point(lambda v: v / 256).convert('L')
+        img_i = image.convert('I')
+        l8 = img_i.point(lambda v: v / 256).convert('L')
+        key = image.info.get('transparency')
+        if key is not None and isinstance(key, int) and 0 <= key < 65536:
+            lut = [255] * 65536
+            lut[key] = 0
+            alpha = img_i.point(lut, 'L')
+            image = Image.merge('LA', (l8, alpha))
+            image.info.pop('transparency', None)
+        else:
+            image = l8
 
     # 1. Normalize transparency and palette images up front before any resizing
     # or color conversion alters color keys or triggers nearest-neighbor scaling.
-    if _has_transparency(image):
-        image = image.convert('RGBA')
+    # Preserve grayscale transparent images as LA so embedded grayscale ICC profiles match in to_srgb.
+    if image.mode == 'L' and 'transparency' in image.info:
+        image = image.convert('LA')
     elif image.mode == 'P':
-        image = image.convert('RGB')
+        if 'transparency' in image.info or image.mode == 'PA':
+            image = image.convert('RGBA')
+        else:
+            image = image.convert('RGB')
+    elif image.mode == 'PA':
+        image = image.convert('RGBA')
+    elif image.mode == 'RGB' and 'transparency' in image.info:
+        image = image.convert('RGBA')
 
     # 2. Max long edge (WebP can't exceed 16383 px per side)
     if max_edge:
@@ -341,10 +361,8 @@ def compress_to_target_size(image_path, target_kb, output_path, output_format=DE
         floor_edge = 1
         lo, hi = floor_edge, long_edge - 1
         best_fit = None
-        # File size scales roughly with pixel count: reuse the initial probe to narrow the search
-        estimate = int(long_edge * (target_kb / min_size_full) ** 0.5) if min_size_full > 0 else 1
-        guess = max(lo, min(hi, estimate))
         while lo <= hi:
+            guess = (lo + hi) // 2
             candidate = _resize_to_long_edge(working, guess)
             size_kb, buf = encode(candidate, min_quality)
             if size_kb <= target_kb:
@@ -352,10 +370,6 @@ def compress_to_target_size(image_path, target_kb, output_path, output_format=DE
                 lo = guess + 1
             else:
                 hi = guess - 1
-            # Stop once within 2% of the size: further steps are invisible
-            if best_fit is not None and hi - lo < max(1, long_edge // 50):
-                break
-            guess = (lo + hi) // 2
 
         if best_fit is not None:
             working = best_fit

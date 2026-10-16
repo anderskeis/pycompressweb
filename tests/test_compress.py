@@ -209,6 +209,40 @@ class CompressionTests(unittest.TestCase):
             self.assertLess(max(img.size), 32)
             self.assertGreaterEqual(min(img.size), 1)
 
+    def test_16bit_grayscale_png_with_trns_transparency(self):
+        # 16-bit grayscale PNG with tRNS transparency key
+        img16 = Image.new('I;16', (100, 100), 32768)
+        img16.putpixel((50, 50), 1000)
+        src = self.out('img16_trns.png')
+        img16.save(src, 'PNG', transparency=32768)
+
+        # WebP: transparent area has alpha=0, opaque has alpha=255
+        compress_to_target_size(src, 500, self.out('img16.webp'), 'webp')
+        with Image.open(self.out('img16.webp')) as img:
+            self.assertEqual(img.mode, 'RGBA')
+            self.assertEqual(img.getpixel((0, 0))[3], 0)
+            self.assertEqual(img.getpixel((50, 50))[3], 255)
+
+        # JPEG: transparent area flattened onto white
+        compress_to_target_size(src, 500, self.out('img16.jpg'), 'jpeg')
+        with Image.open(self.out('img16.jpg')) as img:
+            self.assertEqual(img.mode, 'RGB')
+            self.assertTrue(all(c > 240 for c in img.getpixel((0, 0))))
+
+    def test_jpeg_comment_is_cleared(self):
+        # Source JPEG with embedded COM comment
+        src = self.out('with_comment.jpg')
+        make_photo(200, 200).save(src, 'JPEG', comment=b'Internal secret note')
+        with Image.open(src) as img:
+            self.assertEqual(img.info.get('comment'), b'Internal secret note')
+
+        for exif_mode in ('strip', 'camera'):
+            with self.subTest(exif_mode=exif_mode):
+                dst = self.out(f'cleared_comment_{exif_mode}.jpg')
+                compress_to_target_size(src, 500, dst, 'jpeg', exif_mode=exif_mode)
+                with Image.open(dst) as out_img:
+                    self.assertIsNone(out_img.info.get('comment'))
+
     # --- colour ------------------------------------------------------------
 
     def test_srgb_profile_is_embedded(self):
