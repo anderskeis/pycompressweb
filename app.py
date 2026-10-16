@@ -155,11 +155,11 @@ def _write_buffer_to_file(buffer, output_path):
         shutil.copyfileobj(buffer, f, length=1024 * 1024)
 
 
-def _has_alpha(image):
-    """True if the image carries transparency information."""
+def _has_transparency(image):
+    """True if the image carries transparency (alpha channel, palette transparency, or color-key tRNS)."""
     return (
         image.mode in ('RGBA', 'LA', 'PA')
-        or (image.mode == 'P' and 'transparency' in image.info)
+        or 'transparency' in image.info
     )
 
 
@@ -171,8 +171,7 @@ def to_srgb(image):
     icc = image.info.get('icc_profile')
     alpha = None
 
-    if _has_alpha(image):
-        image = image.convert('RGBA') if image.mode != 'LA' else image
+    if image.mode in ('RGBA', 'LA'):
         alpha = image.getchannel('A')
         image = image.convert('RGB') if image.mode == 'RGBA' else image.convert('L')
 
@@ -181,7 +180,7 @@ def to_srgb(image):
         try:
             src_profile = ImageCms.ImageCmsProfile(io.BytesIO(icc))
             src_name = (ImageCms.getProfileDescription(src_profile) or 'unknown').strip()
-            if 'srgb' in src_name.lower():
+            if icc == SRGB_ICC_BYTES:
                 description = f'sRGB (source: {src_name})'
                 image = image.convert('RGB')
             else:
@@ -271,6 +270,8 @@ def compress_to_target_size(image_path, target_kb, output_path, output_format=DE
         # exif_transpose returns a copy without the original info in some cases
         if 'icc_profile' in opened.info and 'icc_profile' not in image.info:
             image.info['icc_profile'] = opened.info['icc_profile']
+        if 'transparency' in opened.info and 'transparency' not in image.info:
+            image.info['transparency'] = opened.info['transparency']
         image.load()
 
     original_size_kb = os.path.getsize(image_path) / 1024
@@ -280,16 +281,23 @@ def compress_to_target_size(image_path, target_kb, output_path, output_format=DE
     if image.mode in ('I', 'I;16', 'I;16B', 'I;16L'):
         image = image.convert('I').point(lambda v: v / 256).convert('L')
 
-    # 1. Max long edge (WebP can't exceed 16383 px per side)
+    # 1. Normalize transparency and palette images up front before any resizing
+    # or color conversion alters color keys or triggers nearest-neighbor scaling.
+    if _has_transparency(image):
+        image = image.convert('RGBA')
+    elif image.mode == 'P':
+        image = image.convert('RGB')
+
+    # 2. Max long edge (WebP can't exceed 16383 px per side)
     if max_edge:
         image = _resize_to_long_edge(image, int(max_edge))
     if save_format == 'WEBP' and max(image.size) > WEBP_MAX_DIMENSION:
         image = _resize_to_long_edge(image, WEBP_MAX_DIMENSION)
 
-    # 2. Colour: everything becomes sRGB with an embedded sRGB profile
+    # 3. Colour: everything becomes sRGB with an embedded sRGB profile
     image, color_description = to_srgb(image)
 
-    # 3. Transparency: WebP keeps it, JPEG flattens onto white
+    # 4. Transparency: WebP keeps it, JPEG flattens onto white
     if image.mode == 'RGBA':
         if save_format == 'JPEG':
             background = Image.new('RGB', image.size, (255, 255, 255))
@@ -298,7 +306,7 @@ def compress_to_target_size(image_path, target_kb, output_path, output_format=DE
         elif image.getchannel('A').getextrema() == (255, 255):
             image = image.convert('RGB')  # fully opaque, drop the useless alpha
 
-    # 4. Metadata
+    # 5. Metadata
     exif_bytes = build_camera_exif(source_exif) if exif_mode == 'camera' else None
     had_gps = bool(source_exif) and 0x8825 in source_exif
 
@@ -306,10 +314,11 @@ def compress_to_target_size(image_path, target_kb, output_path, output_format=DE
         return encode_image(img, quality, save_format, SRGB_ICC_BYTES, exif_bytes)
 
     def find_best_quality(img):
-        """Highest quality in [min_quality, MAX_QUALITY] that fits. Returns (q, size, buf) or None."""
+        """Highest quality in [min_quality, MAX_QUALITY] that fits.
+        Returns ((q, size, buf) or None, min_size)."""
         min_size, min_buf = encode(img, min_quality)
         if min_size > target_kb:
-            return None
+            return None, min_size
         best = (min_quality, min_size, min_buf)
         lo, hi = min_quality + 1, MAX_QUALITY
         while lo <= hi:
@@ -320,21 +329,20 @@ def compress_to_target_size(image_path, target_kb, output_path, output_format=DE
                 lo = mid + 1
             else:
                 hi = mid - 1
-        return best
+        return best, min_size
 
     target_met = True
     working = image
-    found = find_best_quality(working)
+    found, min_size_full = find_best_quality(working)
 
     if found is None:
         # Need to downscale. Search the long edge (in px) that fits at min_quality.
         long_edge = max(working.size)
-        floor_edge = min(64, long_edge)
-        min_size_full, _ = encode(working, min_quality)
-        # File size scales roughly with pixel count: use that to narrow the search
-        estimate = int(long_edge * (target_kb / min_size_full) ** 0.5)
+        floor_edge = 1
         lo, hi = floor_edge, long_edge - 1
         best_fit = None
+        # File size scales roughly with pixel count: reuse the initial probe to narrow the search
+        estimate = int(long_edge * (target_kb / min_size_full) ** 0.5) if min_size_full > 0 else 1
         guess = max(lo, min(hi, estimate))
         while lo <= hi:
             candidate = _resize_to_long_edge(working, guess)
@@ -345,19 +353,19 @@ def compress_to_target_size(image_path, target_kb, output_path, output_format=DE
             else:
                 hi = guess - 1
             # Stop once within 2% of the size: further steps are invisible
-            if best_fit is not None and hi - lo < max(16, long_edge // 50):
+            if best_fit is not None and hi - lo < max(1, long_edge // 50):
                 break
             guess = (lo + hi) // 2
 
         if best_fit is not None:
             working = best_fit
-            found = find_best_quality(working)
+            found, _ = find_best_quality(working)
         if found is None:
-            # Even the smallest size at the quality floor is too big
+            # Even the smallest size at the quality floor is too big (or long_edge was 1)
             working = _resize_to_long_edge(working, floor_edge)
             size_kb, buf = encode(working, min_quality)
             found = (min_quality, size_kb, buf)
-            target_met = False
+            target_met = size_kb <= target_kb
 
     quality, size_kb, buf = found
     _write_buffer_to_file(buf, output_path)

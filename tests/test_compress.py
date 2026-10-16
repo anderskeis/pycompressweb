@@ -140,6 +140,75 @@ class CompressionTests(unittest.TestCase):
             self.assertEqual(img.mode, 'RGB')
             self.assertTrue(all(c > 240 for c in img.getpixel((5, 5))))
 
+    def test_png_colorkey_transparency_rgb(self):
+        # RGB PNG with tRNS color-key transparency
+        for resize in (False, True):
+            with self.subTest(resize=resize):
+                colorkey_img = Image.new('RGB', (100, 100), (255, 0, 0))
+                colorkey_img.putpixel((50, 50), (0, 255, 0))
+                src = self.out(f'colorkey_rgb_{resize}.png')
+                colorkey_img.save(src, 'PNG', transparency=(255, 0, 0))
+
+                max_e = 50 if resize else 0
+                # WebP: transparent area should have alpha=0
+                compress_to_target_size(src, 500, self.out(f'ck_rgb_{resize}.webp'), 'webp', max_edge=max_e)
+                with Image.open(self.out(f'ck_rgb_{resize}.webp')) as img:
+                    self.assertEqual(img.mode, 'RGBA')
+                    self.assertEqual(img.getpixel((0, 0))[3], 0)
+
+                # JPEG: transparent area should be flattened onto white
+                compress_to_target_size(src, 500, self.out(f'ck_rgb_{resize}.jpg'), 'jpeg', max_edge=max_e)
+                with Image.open(self.out(f'ck_rgb_{resize}.jpg')) as img:
+                    self.assertEqual(img.mode, 'RGB')
+                    self.assertTrue(all(c > 240 for c in img.getpixel((0, 0))))
+
+    def test_png_colorkey_transparency_grayscale(self):
+        # Grayscale (L) PNG with tRNS color-key transparency
+        for resize in (False, True):
+            with self.subTest(resize=resize):
+                colorkey_l = Image.new('L', (100, 100), 0)
+                colorkey_l.putpixel((50, 50), 255)
+                src = self.out(f'colorkey_l_{resize}.png')
+                colorkey_l.save(src, 'PNG', transparency=0)
+
+                max_e = 50 if resize else 0
+                # WebP: transparent area should have alpha=0
+                compress_to_target_size(src, 500, self.out(f'ck_l_{resize}.webp'), 'webp', max_edge=max_e)
+                with Image.open(self.out(f'ck_l_{resize}.webp')) as img:
+                    self.assertEqual(img.mode, 'RGBA')
+                    self.assertEqual(img.getpixel((0, 0))[3], 0)
+
+                # JPEG: transparent area should be flattened onto white
+                compress_to_target_size(src, 500, self.out(f'ck_l_{resize}.jpg'), 'jpeg', max_edge=max_e)
+                with Image.open(self.out(f'ck_l_{resize}.jpg')) as img:
+                    self.assertEqual(img.mode, 'RGB')
+                    self.assertTrue(all(c > 240 for c in img.getpixel((0, 0))))
+
+    def test_palette_image_resizing_and_icc(self):
+        # Palette (P) image with non-standard ICC profile
+        photo = make_photo(100, 100)
+        p_img = photo.convert('P', palette=Image.Palette.ADAPTIVE)
+        src = self.out('palette_icc.png')
+        b = bytearray(app_module.SRGB_ICC_BYTES)
+        b[568] = ord('X')
+        p_img.save(src, 'PNG', icc_profile=bytes(b))
+
+        r = compress_to_target_size(src, 500, self.out('palette_out.webp'), 'webp', max_edge=50)
+        with Image.open(self.out('palette_out.webp')) as img:
+            self.assertEqual(img.size, (50, 50))
+            self.assertIn(img.mode, ('RGB', 'RGBA'))
+        self.assertIn('converted from', r['color_profile'])
+
+    def test_small_dimension_search_down_to_one_pixel(self):
+        # Image whose long edge is already <= 64 px
+        small_src = self.out('small_32px.jpg')
+        make_photo(32, 32).save(small_src, 'JPEG', quality=95)
+        # Aggressive target requiring downscaling below 32 px
+        r = compress_to_target_size(small_src, 0.5, self.out('down_to_1px.webp'), 'webp', min_quality=70)
+        with Image.open(self.out('down_to_1px.webp')) as img:
+            self.assertLess(max(img.size), 32)
+            self.assertGreaterEqual(min(img.size), 1)
+
     # --- colour ------------------------------------------------------------
 
     def test_srgb_profile_is_embedded(self):
