@@ -1,140 +1,90 @@
 # ImageCompress
 
-Batch-compress JPG and PNG images to a target file size in your browser, as **WebP** or **Progressive JPEG**. No upload to third parties — everything runs locally.
+Batch-compress JPG and PNG images to a target file size as **WebP** or **Progressive JPEG**. Images are processed on your server, not sent to third-party services.
 
 [![Docker Hub](https://img.shields.io/docker/pulls/anderskeis/pycompressweb?style=flat-square)](https://hub.docker.com/r/anderskeis/pycompressweb)
 
-![ImageCompress UI](assets/screenshot.png)
+![Upload and compression settings with Blog, Instagram and Facebook presets](assets/screenshot.png)
 
-## Quick Start
+## Run
 
 ```bash
-# Run with Docker (recommended)
-docker run -d -p 5050:5050 anderskeis/pycompressweb:latest
+docker run -d --name pycompressweb \
+  -p 127.0.0.1:5050:5050 anderskeis/pycompressweb:latest
 ```
 
-Open **http://localhost:5050** and start compressing.
+Open **http://localhost:5050**.
 
-### Other options
+To build from source:
 
 ```bash
-# Docker Compose (from source)
 git clone https://github.com/anderskeis/pycompressweb.git
-cd pycompressweb && docker compose up -d
-
-# Local development (no Docker)
-pip install -r requirements.txt && python app.py
+cd pycompressweb
+docker compose up -d --build
 ```
 
-## How to Use
+**Trusted local use only:** there is no authentication or rate limiting. Do not expose the app to the public internet. The included Compose file publishes port 5050 on all host interfaces; restrict access to your trusted network.
 
-1. **Drop images** onto the upload zone (or click to browse, or paste with Ctrl+V)
-2. **Pick a profile**: click **Blog preset** for web publishing, **Instagram preset** or **Facebook preset** for feed photos, or set the options yourself
-3. **Set target size** in KB — use presets (50/100/200/500 KB, 1 MB) or enter custom
-4. **Pick output format**: WebP (default) or Progressive JPEG
-5. Optionally set **Max long edge**, **Max width**, **Min quality**, and **Metadata** (see [Options](#options))
-6. Click **Compress Images** (or press Ctrl+Enter)
-7. **Download** — get all files as ZIP, or download individual images
-8. Click **New Session** to start fresh
+## Use
 
-**Shortcuts**: Ctrl+V paste · Esc clear files · Ctrl+Enter compress
+1. Drop, browse or paste JPG/PNG files (up to **500 MB per batch**).
+2. Choose a preset or adjust the target size, format, resize limits, quality floor and metadata.
+3. Click **Compress Images**, then download individual files or a ZIP.
 
-![Compression Results](assets/screenshot-results.png)
+**Shortcuts:** Ctrl/Cmd+V paste, Esc clear files, Ctrl/Cmd+Enter compress.
 
-## Options
+![Compression results with file sizes, dimensions, quality and download controls](assets/screenshot-results.png)
 
-| Option | Values | Default | What it does |
-|--------|--------|---------|--------------|
-| Target size | 10–10000 KB | 200 | Output never exceeds this unless impossible (then the result is flagged) |
-| Output format | WebP, Progressive JPEG | WebP | WebP is smaller and keeps transparency. JPEG is always progressive and flattens transparency onto white |
-| Max long edge | Off, 1440, 1600, 2048, 2400, 3000, 4000 px | Off | Resizes the longest side before compressing. Never upscales |
-| Max width | Off, 1080 px | Off | Limits width together with Max long edge, preserving aspect ratio without cropping |
-| Min quality | 10–95 | 70 | Quality floor. If the target can't be met above it, the image is **shrunk** instead of degraded |
-| Metadata | Strip all, Keep camera info | Strip all | *Camera info* keeps make, model, lens, exposure, ISO, focal length, date and copyright. **GPS is always removed.** Orientation is applied to the pixels, never stored |
+## Presets
 
-**Colour:** every output is converted to **sRGB** (from the embedded Display P3, Adobe RGB, etc.) and carries an sRGB profile, so colours look the same in every browser. Images without a profile are assumed to be sRGB.
+| Preset | Output | Target | Resize limits | Min quality | Metadata |
+|--------|--------|--------|---------------|-------------|----------|
+| Blog | WebP | 250 KB | 2400 px long edge | 70 | Keep camera info |
+| Instagram | Progressive JPEG | 10000 KB | 1080 px wide, 1440 px long edge | 95 | Strip all |
+| Facebook | Progressive JPEG | 10000 KB | 2048 px long edge | 95 | Strip all |
 
-### Blog preset
+Social presets are for **feed photographs**, not Stories, covers, profile pictures or ads. Their 10000 KB target is a generous compression budget, not a platform requirement.
 
-One click sets: **WebP · 250 KB · max 2400 px · min quality 70 · keep camera info (GPS removed)**. The button highlights only while all settings still match it.
+Instagram examples: **1080 × 1080** square, **1080 × 1350** or **1080 × 1440** portrait, approximately **1080 × 566** landscape. Images retain their aspect ratio: there is **no cropping, padding or upscaling**. Platforms may still crop previews or recompress uploads.
 
-### Instagram and Facebook presets
+Sizing references: [Instagram feed sizes](https://buffer.com/resources/instagram-image-size/) · [Facebook photo exports](https://photographylife.com/how-to-properly-resize-images-for-facebook).
 
-These presets are for **feed photographs**, not Stories, covers, profile pictures, link previews or ads.
+## Compression settings
 
-| Preset | Format | Resize limits | Quality | Metadata |
-|--------|--------|---------------|---------|----------|
-| Instagram | Progressive JPEG, sRGB | 1080 px wide, 1440 px long edge | 95 | Strip all |
-| Facebook | Progressive JPEG, sRGB | 2048 px long edge | 95 | Strip all |
+Default settings: **WebP, 200 KB, no resize limits, minimum quality 70, strip metadata**.
 
-Instagram's width limit is separate from its long-edge limit: a sufficiently large square becomes **1080 × 1080**, a 4:5 portrait **1080 × 1350**, a 3:4 portrait **1080 × 1440**, and a 1.91:1 landscape approximately **1080 × 566**. Facebook uses a higher-resolution photo export rather than a fixed feed layout size; for example, a 3:2 landscape becomes **2048 × 1365**.
+- **Target size:** 10–10000 KB in the UI. The compressor selects the highest quality up to 95 that fits; if the quality floor is still too large, it reduces dimensions. Unreachable targets are flagged.
+- **Resize limits:** optional maximum long edge and width, applied after EXIF orientation. Never upscales or crops.
+- **Format:** WebP preserves transparency; Progressive JPEG flattens it onto white.
+- **Colour:** outputs carry an sRGB profile. Valid embedded profiles are converted; missing or unreadable profiles are treated as sRGB.
+- **Metadata:** strip all or retain camera/lens/exposure information, date and copyright. GPS is always removed.
 
-Both presets **preserve the whole image and never upscale**. Smaller sources stay smaller, and other aspect ratios are fitted within the limits without cropping or padding. Instagram may still crop unsupported aspect ratios or grid previews on its side.
+Expired sessions are cleaned during subsequent uploads after one hour. **New Session** removes the current session's files immediately. Set the `LOG_LEVEL` environment variable to `DEBUG`, `INFO` (default), `WARNING` or `ERROR` for server logging.
 
-Both set the target to **10000 KB**, a generous application budget rather than a platform requirement, to prioritize quality and avoid the Blog preset's aggressive file-size reduction. Outputs normally use much less. If that budget cannot be met at quality 95, the existing compressor reduces dimensions instead. Both platforms may recompress uploads; no export setting guarantees unchanged quality. JPEG is intended for photographs and flattens transparency onto white; these are not lossless graphics presets.
+## API
 
-All three preset buttons highlight only while every setting matches; switching back to Blog or Facebook also clears Instagram's width limit.
+`POST /upload` accepts multipart `files[]` and a positive `target_kb`, plus:
 
-Sizing references: [Buffer's Instagram guide](https://buffer.com/resources/instagram-image-size/) (including 3:4 feed photos), [Photography Life's Facebook photo export guide](https://photographylife.com/how-to-properly-resize-images-for-facebook) (2048 px long-edge photo exports), and [Facebook's photo-quality help](https://www.facebook.com/help/266520536764594). Feed layout sizes differ from full-resolution photo exports; see [Buffer's platform size guide](https://buffer.com/resources/social-media-image-sizes/).
+| Optional field | Values | Default |
+|----------------|--------|---------|
+| `output_format` | `webp`, `jpeg` | `webp` |
+| `max_edge`, `max_width` | 0–20000 px; `0` disables the limit | `0` |
+| `min_quality` | 10–95 | `70` |
+| `exif_mode` | `strip`, `camera` | `strip` |
 
-### How compression works
+Invalid options return `400`. The response includes `session_id` and per-file results with sizes, dimensions, quality, colour profile, metadata handling and `target_met`.
 
-1. Apply EXIF orientation, then resize to *Max long edge* and *Max width* (if set) in one pass
-2. Convert to sRGB; flatten transparency if the output is JPEG
-3. Binary-search the highest quality in `[Min quality, 95]` that fits the target
-4. If even *Min quality* is too big, binary-search the largest size that fits at *Min quality*
-
-The old behaviour (resolution fixed, quality driven down to 25) produced heavy artifacts on large photos. Shrinking first gives sharper images at the same file size. For the previous behaviour, set Max long edge to *Off* and Min quality to *10*.
-
-### API
-
-`POST /upload` (multipart form): `files[]`, `target_kb`, and optionally `output_format` (`webp`|`jpeg`), `max_edge` (px, `0` = off), `max_width` (0–20000 px, `0` = off; defaults to off), `min_quality` (10–95), `exif_mode` (`strip`|`camera`). Invalid values return `400`. Each result reports `final_resolution`, `quality_used`, `output_format`, `color_profile`, `metadata`, and `target_met`.
-
-## Features
-
-- Batch upload: drag & drop, file picker, or clipboard paste
-- Image thumbnails with total size indicator (500 MB limit)
-- Output as WebP or Progressive JPEG, with one-click Blog, Instagram and Facebook presets
-- Smart compression: quality search with a configurable floor, then resolution scaling
-- sRGB conversion with embedded profile; optional camera metadata, GPS always stripped
-- Warns when a target can't be reached at the chosen minimum quality
-- EXIF orientation preserved — rotated photos stay upright
-- Per-file results: original vs compressed size, resolution, quality, reduction %
-- Download all as ZIP or individual files
-- Auto-cleanup of temporary files after 1 hour
-
-## ⚠️ Security Warning
-
-**LOCAL USE ONLY.** No authentication, no rate limiting. Do not expose to the public internet.
-
-## Configuration
-
-| Setting | Default | Description |
-|---------|---------|-------------|
-| Port | 5050 | Web server port |
-| Max Upload | 500 MB | Maximum total upload size |
-| Min Quality | 70% | Default quality floor (configurable in the UI, 10–95) |
-| Max Quality | 95% | Maximum quality |
-| Session Cleanup | 1 hour | Auto-delete temporary files |
-| LOG_LEVEL | INFO | DEBUG, INFO, WARNING, or ERROR |
-
-Set `LOG_LEVEL` via environment variable: `docker run -e LOG_LEVEL=DEBUG -p 5050:5050 anderskeis/pycompressweb:latest`
+`GET /download/<session_id>` downloads a ZIP; append `/<filename>` for one file. `POST /cleanup/<session_id>` deletes a session.
 
 ## Development
+
+Flask, Pillow, vanilla HTML/CSS/JS; the Docker image uses Python 3.11 and Gunicorn.
 
 ```bash
 pip install -r requirements.txt
 python -m unittest discover -s tests
+python app.py
 ```
-
-## Upgrading
-
-> [!NOTE]
-> **Breaking change:** the *Keep Original*, *Convert to JPG* and *Convert to PNG* formats were removed. `output_format` now accepts only `webp` or `jpeg`, and the old values return `400`. PNG output is no longer produced. Transparent images should use WebP.
-
-## Tech Stack
-
-Python 3.11 · Flask · Pillow 11 · Gunicorn · Vanilla HTML/CSS/JS · Docker (amd64/arm64)
 
 ## License
 
