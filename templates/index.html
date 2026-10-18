@@ -434,9 +434,11 @@
             color: var(--primary-purple);
         }
 
-        /* Profile (Blog preset) */
+        /* Profiles */
         .profile-row {
             display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
             margin-top: 28px;
         }
 
@@ -1091,11 +1093,26 @@
 
             <div class="profile-row">
                 <button type="button" class="profile-btn" id="blogPresetBtn"
+                    aria-pressed="false"
                     title="WebP · max 2400 px · 250 KB · min quality 70 · keep camera info (GPS removed)">
                     Blog preset
                     <span class="profile-hint">WebP · 2400 px · 250 KB · q≥70 · camera info</span>
                 </button>
+                <button type="button" class="profile-btn" id="instagramPresetBtn" aria-pressed="false"
+                    title="Feed photos · JPEG · max 1080 wide / 1440 long edge · quality 95 · strip metadata">
+                    Instagram preset
+                    <span class="profile-hint">JPEG · fit 1080 × 1440 px · q95 · no crop</span>
+                </button>
+                <button type="button" class="profile-btn" id="facebookPresetBtn" aria-pressed="false"
+                    title="Feed photos · JPEG · max 2048 px long edge · quality 95 · strip metadata">
+                    Facebook preset
+                    <span class="profile-hint">JPEG · 2048 px long edge · q95 · no crop</span>
+                </button>
             </div>
+            <p class="setting-hint">Social presets are for feed photos, not Stories, covers or ads.
+                Instagram: 1080 × 1080 square, 1080 × 1350 or 1440 portrait, 1080 × 566 landscape.
+                Images keep their shape and never upscale; Instagram may crop other aspect ratios.
+                Both platforms may recompress uploads.</p>
 
             <div class="settings-grid">
                 <div class="setting-group">
@@ -1121,6 +1138,7 @@
                     <label for="maxEdge">Max Long Edge</label>
                     <select id="maxEdge">
                         <option value="0" selected>Off (keep size)</option>
+                        <option value="1440">1440 px</option>
                         <option value="1600">1600 px</option>
                         <option value="2048">2048 px</option>
                         <option value="2400">2400 px</option>
@@ -1128,6 +1146,14 @@
                         <option value="4000">4000 px</option>
                     </select>
                     <span class="setting-hint">Resize before compressing. Never upscales.</span>
+                </div>
+                <div class="setting-group">
+                    <label for="maxWidth">Max Width</label>
+                    <select id="maxWidth">
+                        <option value="0" selected>Off (no width limit)</option>
+                        <option value="1080">1080 px (Instagram feed)</option>
+                    </select>
+                    <span class="setting-hint">Works with Max Long Edge. Keeps aspect ratio; never crops.</span>
                 </div>
                 <div class="setting-group">
                     <label for="minQuality">Min Quality</label>
@@ -1272,17 +1298,23 @@
         const totalSizeFill = document.getElementById('totalSizeFill');
         const presetsRow = document.getElementById('presetsRow');
         const maxEdge = document.getElementById('maxEdge');
+        const maxWidth = document.getElementById('maxWidth');
         const minQuality = document.getElementById('minQuality');
         const exifMode = document.getElementById('exifMode');
-        const blogPresetBtn = document.getElementById('blogPresetBtn');
-
-        // Blog preset: tuned for web publishing (see README "Blog preset")
-        const BLOG_PRESET = {
-            targetSize: '250',
-            outputFormat: 'webp',
-            maxEdge: '2400',
-            minQuality: '70',
-            exifMode: 'camera',
+        const profileFields = { targetSize, outputFormat, maxEdge, maxWidth, minQuality, exifMode };
+        const profiles = {
+            blog: {
+                targetSize: '250', outputFormat: 'webp', maxEdge: '2400',
+                maxWidth: '0', minQuality: '70', exifMode: 'camera',
+            },
+            instagram: {
+                targetSize: '10000', outputFormat: 'jpeg', maxEdge: '1440',
+                maxWidth: '1080', minQuality: '95', exifMode: 'strip',
+            },
+            facebook: {
+                targetSize: '10000', outputFormat: 'jpeg', maxEdge: '2048',
+                maxWidth: '0', minQuality: '95', exifMode: 'strip',
+            },
         };
 
         // Event Listeners
@@ -1358,30 +1390,27 @@
             btn.classList.add('active');
         });
 
-        // Blog preset: fill every setting at once
-        blogPresetBtn.addEventListener('click', () => {
-            targetSize.value = BLOG_PRESET.targetSize;
-            outputFormat.value = BLOG_PRESET.outputFormat;
-            maxEdge.value = BLOG_PRESET.maxEdge;
-            minQuality.value = BLOG_PRESET.minQuality;
-            exifMode.value = BLOG_PRESET.exifMode;
-            targetSize.dispatchEvent(new Event('input'));
-            syncBlogPreset();
+        Object.entries(profiles).forEach(([name, settings]) => {
+            document.getElementById(`${name}PresetBtn`).addEventListener('click', () => {
+                Object.entries(settings).forEach(([field, value]) => {
+                    profileFields[field].value = value;
+                });
+                targetSize.dispatchEvent(new Event('input'));
+            });
         });
 
-        // Highlight the Blog preset only while every setting still matches it
-        function syncBlogPreset() {
-            const matches =
-                targetSize.value === BLOG_PRESET.targetSize &&
-                outputFormat.value === BLOG_PRESET.outputFormat &&
-                maxEdge.value === BLOG_PRESET.maxEdge &&
-                minQuality.value === BLOG_PRESET.minQuality &&
-                exifMode.value === BLOG_PRESET.exifMode;
-            blogPresetBtn.classList.toggle('active', matches);
+        function syncProfiles() {
+            Object.entries(profiles).forEach(([name, settings]) => {
+                const matches = Object.entries(settings).every(([field, value]) =>
+                    profileFields[field].value === value);
+                const button = document.getElementById(`${name}PresetBtn`);
+                button.classList.toggle('active', matches);
+                button.setAttribute('aria-pressed', String(matches));
+            });
         }
-        [targetSize, minQuality].forEach(el => el.addEventListener('input', syncBlogPreset));
-        [outputFormat, maxEdge, exifMode].forEach(el => el.addEventListener('change', syncBlogPreset));
-        presetsRow.addEventListener('click', syncBlogPreset);
+        [targetSize, minQuality].forEach(el => el.addEventListener('input', syncProfiles));
+        [outputFormat, maxEdge, maxWidth, exifMode].forEach(el => el.addEventListener('change', syncProfiles));
+        presetsRow.addEventListener('click', syncProfiles);
 
         // Sync preset highlight when manually editing target size
         targetSize.addEventListener('input', () => {
@@ -1584,6 +1613,7 @@
             formData.append('target_kb', target);
             formData.append('output_format', outputFormat.value);
             formData.append('max_edge', maxEdge.value);
+            formData.append('max_width', maxWidth.value);
             formData.append('min_quality', minQ);
             formData.append('exif_mode', exifMode.value);
 
