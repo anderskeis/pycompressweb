@@ -6,22 +6,15 @@ Batch-compress JPG and PNG images to a target file size as **WebP** or **Progres
 
 ![Upload and compression settings with Blog, Instagram and Facebook presets](assets/screenshot.png)
 
-## Run
-
-```bash
-docker run -d --name pycompressweb \
-  -p 127.0.0.1:5050:5050 anderskeis/pycompressweb:latest
-```
-
-Open **http://localhost:5050**.
-
-To build from source:
+## Run with Docker Compose
 
 ```bash
 git clone https://github.com/anderskeis/pycompressweb.git
 cd pycompressweb
 docker compose up -d --build
 ```
+
+Open **http://localhost:5050**.
 
 **Trusted local use only:** there is no authentication or rate limiting. Do not expose the app to the public internet. The included Compose file publishes port 5050 on all host interfaces; restrict access to your trusted network.
 
