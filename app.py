@@ -239,12 +239,13 @@ def _resize_to_long_edge(image, long_edge):
 
 
 def compress_to_target_size(image_path, target_kb, output_path, output_format=DEFAULT_OUTPUT_FORMAT,
-                            max_edge=0, min_quality=DEFAULT_MIN_QUALITY, exif_mode=DEFAULT_EXIF_MODE):
+                            max_edge=0, min_quality=DEFAULT_MIN_QUALITY, exif_mode=DEFAULT_EXIF_MODE,
+                            max_width=0):
     """
     Compress image to fit target_kb with the best possible quality.
 
     Pipeline:
-      1. Apply EXIF orientation, then downscale to max_edge (if set).
+      1. Apply EXIF orientation, then downscale to max_edge/max_width (if set).
       2. Convert colours to sRGB and embed an sRGB profile.
       3. Binary-search quality in [min_quality, 95] at the current size.
       4. If even min_quality doesn't fit, binary-search the largest size that
@@ -259,6 +260,7 @@ def compress_to_target_size(image_path, target_kb, output_path, output_format=DE
         min_quality: Quality floor (10-95)
         exif_mode: 'strip' (remove all metadata) or 'camera' (keep camera/lens
                    info, always remove GPS)
+        max_width: Max width in px, 0 = no width limit
 
     Returns dict with compression results.
     """
@@ -310,11 +312,16 @@ def compress_to_target_size(image_path, target_kb, output_path, output_format=DE
     elif image.mode == 'RGB' and 'transparency' in image.info:
         image = image.convert('RGBA')
 
-    # 2. Max long edge (WebP can't exceed 16383 px per side)
-    if max_edge:
-        image = _resize_to_long_edge(image, int(max_edge))
-    if save_format == 'WEBP' and max(image.size) > WEBP_MAX_DIMENSION:
-        image = _resize_to_long_edge(image, WEBP_MAX_DIMENSION)
+    # 2. Apply all resize limits in one pass, without cropping or upscaling.
+    width, height = image.size
+    edge_limit = int(max_edge) if max_edge else max(image.size)
+    if save_format == 'WEBP':
+        edge_limit = min(edge_limit, WEBP_MAX_DIMENSION)
+    scale = min(1.0, edge_limit / max(image.size),
+                int(max_width) / width if max_width else 1.0)
+    if scale < 1.0:
+        image = image.resize((max(1, round(width * scale)), max(1, round(height * scale))),
+                             Image.LANCZOS)
 
     # 3. Colour: everything becomes sRGB with an embedded sRGB profile
     image, color_description = to_srgb(image)
@@ -475,6 +482,7 @@ def upload_files():
     target_kb = request.form.get('target_kb', type=float)
     output_format = request.form.get('output_format', DEFAULT_OUTPUT_FORMAT)
     max_edge = _parse_int(request.form.get('max_edge'), default=0)
+    max_width = _parse_int(request.form.get('max_width'), default=0)
     min_quality = _parse_int(request.form.get('min_quality'), default=DEFAULT_MIN_QUALITY)
     exif_mode = request.form.get('exif_mode', DEFAULT_EXIF_MODE)
 
@@ -489,6 +497,10 @@ def upload_files():
     if max_edge is None or not (0 <= max_edge <= MAX_EDGE_LIMIT):
         return jsonify({'error': f'Invalid max edge. Use 0 (off) to {MAX_EDGE_LIMIT} px'}), 400
 
+    if max_width is None or not (0 <= max_width <= MAX_EDGE_LIMIT):
+        logger.warning(f'Invalid max width requested: {request.form.get("max_width")}')
+        return jsonify({'error': f'Invalid max width. Use 0 (off) to {MAX_EDGE_LIMIT} px'}), 400
+
     if min_quality is None or not (MIN_QUALITY_LOWER_BOUND <= min_quality <= MAX_QUALITY):
         return jsonify({'error': f'Invalid min quality. Use {MIN_QUALITY_LOWER_BOUND}-{MAX_QUALITY}'}), 400
 
@@ -500,7 +512,8 @@ def upload_files():
         return jsonify({'error': 'No files selected'}), 400
 
     logger.info(f'Upload received: {len(files)} files, target={target_kb}KB, format={output_format}, '
-                f'max_edge={max_edge or "off"}, min_quality={min_quality}, exif={exif_mode}')
+                f'max_edge={max_edge or "off"}, max_width={max_width or "off"}, '
+                f'min_quality={min_quality}, exif={exif_mode}')
 
     # Create session folders
     session_id = str(uuid.uuid4())
@@ -552,6 +565,7 @@ def upload_files():
             compression_result = compress_to_target_size(
                 input_file, t_kb, output_file, out_fmt,
                 max_edge=max_edge, min_quality=min_quality, exif_mode=exif_mode,
+                max_width=max_width,
             )
             compression_result['filename'] = compression_result.get('output_filename', filename)
             compression_result['original_filename'] = original_filename

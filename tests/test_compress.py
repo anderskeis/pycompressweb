@@ -133,6 +133,48 @@ class CompressionTests(unittest.TestCase):
         with Image.open(self.out('u.webp')) as img:
             self.assertEqual(img.size, (800, 600))
 
+    def test_instagram_bounds_preserve_shape_without_upscaling(self):
+        cases = (
+            ((2160, 2160), (1080, 1080)),
+            ((2160, 2700), (1080, 1350)),
+            ((2160, 2880), (1080, 1440)),
+            ((2160, 1132), (1080, 566)),
+            ((1200, 2400), (720, 1440)),
+            ((600, 800), (600, 800)),
+        )
+        for source_size, expected in cases:
+            with self.subTest(source_size=source_size):
+                src, dst = self.out('feed.png'), self.out('feed.jpg')
+                source = Image.new('RGB', source_size, 'blue')
+                ImageDraw.Draw(source).rectangle((0, 0, source_size[0] - 1, source_size[1] - 1),
+                                                outline='red', width=20)
+                source.save(src)
+                compress_to_target_size(src, 10000, dst, 'jpeg', max_edge=1440,
+                                        max_width=1080, min_quality=95)
+                with Image.open(dst) as img:
+                    self.assertEqual(img.size, expected)
+                    for corner in ((0, 0), (img.width - 1, img.height - 1)):
+                        red, green, blue = img.getpixel(corner)
+                        self.assertGreater(red, 200)
+                        self.assertLess(blue, 50)
+
+    def test_width_limit_applies_after_exif_orientation(self):
+        src, dst = self.out('rotated.jpg'), self.out('rotated_out.jpg')
+        exif = Image.Exif()
+        exif[0x0112] = 6
+        Image.new('RGB', (2400, 1800), 'blue').save(src, exif=exif)
+        compress_to_target_size(src, 10000, dst, 'jpeg', max_edge=1440,
+                                max_width=1080, min_quality=95)
+        with Image.open(dst) as img:
+            self.assertEqual(img.size, (1080, 1440))
+            self.assertNotIn(0x0112, img.getexif())
+
+    def test_width_limit_works_without_long_edge_limit(self):
+        compress_to_target_size(self.photo_jpg, 10000, self.out('width.jpg'), 'jpeg',
+                                max_width=1080, min_quality=95)
+        with Image.open(self.out('width.jpg')) as img:
+            self.assertEqual(img.size, (1080, 720))
+
     def test_quality_floor_shrinks_instead_of_degrading(self):
         r = compress_to_target_size(self.photo_jpg, 60, self.out('q.jpg'), 'jpeg', min_quality=80)
         self.assertGreaterEqual(r['quality_used'], 80)
@@ -390,6 +432,9 @@ class UploadEndpointTests(unittest.TestCase):
         self.assertEqual(self.post(min_quality='5').status_code, 400)
         self.assertEqual(self.post(min_quality='99').status_code, 400)
         self.assertEqual(self.post(exif_mode='all').status_code, 400)
+        for value in ('-1', 'abc', '20001', '1080.5'):
+            with self.subTest(max_width=value):
+                self.assertEqual(self.post(max_width=value).status_code, 400)
 
     def test_blog_preset_parameters(self):
         resp = self.post(target_kb='250', output_format='webp', max_edge='2400',
@@ -401,6 +446,32 @@ class UploadEndpointTests(unittest.TestCase):
             self.assertGreaterEqual(r['quality_used'], 70)
             self.assertIn('color_profile', r)
             self.assertIn('metadata', r)
+
+    def test_social_preset_parameters(self):
+        buf = io.BytesIO()
+        make_photo(3000, 2000).save(buf, 'JPEG', quality=95, exif=camera_exif_with_gps())
+        self.jpeg_bytes = buf.getvalue()
+        for name, max_edge, max_width, resolution in (
+            ('instagram', '1440', '1080', '1080x720'),
+            ('facebook', '2048', '0', '2048x1365'),
+        ):
+            with self.subTest(preset=name):
+                resp = self.post(target_kb='10000', output_format='jpeg', max_edge=max_edge,
+                                 max_width=max_width, min_quality='95', exif_mode='strip')
+                self.assertEqual(resp.status_code, 200)
+                data = resp.get_json()
+                for result, expected in zip(data['results'], (resolution, '600x400')):
+                    self.assertTrue(result['success'])
+                    self.assertTrue(result['target_met'])
+                    self.assertEqual(result['quality_used'], 95)
+                    self.assertEqual(result['final_resolution'], expected)
+                    self.assertEqual(result['metadata'], 'All metadata stripped')
+                    path = os.path.join(app_module.OUTPUT_FOLDER, data['session_id'], result['filename'])
+                    with Image.open(path) as img:
+                        self.assertEqual(img.format, 'JPEG')
+                        self.assertTrue(img.info.get('progressive'))
+                        self.assertEqual(len(img.getexif()), 0)
+                        self.assertEqual(img.info.get('icc_profile'), app_module.SRGB_ICC_BYTES)
 
 
 if __name__ == '__main__':
